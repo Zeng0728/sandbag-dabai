@@ -740,11 +740,18 @@ function updateHUD(){
   $('#barFill').style.width = (total/MAX*100)+'%';
   const w = $('#hpWord');
   if(w){
+    // 9 档状态，按伤害比例变化
+    const pct = total / MAX;
     w.textContent = ko ? '瘫下去了' :
       total === 0 ? '精神着呢' :
-      total < 13 ? '还行' :
-      total < 26 ? '有点吃力' :
-      total < 40 ? '快撑不住了' : '瘫下去了';
+      pct < 0.12 ? '挺得住' :
+      pct < 0.25 ? '还行' :
+      pct < 0.38 ? '有点吃力' :
+      pct < 0.50 ? '喘上了' :
+      pct < 0.63 ? '站不太稳' :
+      pct < 0.76 ? '腿软了' :
+      pct < 0.88 ? '快撑不住了' :
+      pct < 1.00 ? '要倒了' : '瘫下去了';
   }
   const t = $('#tip');
   if(ko){ t.textContent = '💨 它瘫下去了，6 秒后自己爬起来'; return; }
