@@ -1,0 +1,16 @@
+# Render（后端）一键部署配置
+services:
+  - type: web
+    name: sandbag-dabai-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DEEPSEEK_API_KEY      # 在你的 Render 后台填值，不要写在这里
+        sync: false
+      - key: LLM_MODEL
+        value: deepseek-chat
+      - key: CORS_ORIGINS          # 前端部署后的域名
+        value: "*"

@@ -39,9 +39,12 @@ MAX_UPLOAD_BYTES = 5 * 1024 * 1024      # 5MB
 RATE_LIMIT = 20                          # 每分钟每 IP 最多 20 次 /api 请求
 
 app = FastAPI(title="沙袋大白 API", version="0.1.0")
+
+# CORS：生产环境用 CORS_ORIGINS 指定前端域名（逗号分隔），留空=允许所有
+_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "*").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_origins or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

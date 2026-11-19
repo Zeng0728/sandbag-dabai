@@ -2,8 +2,15 @@ import type {
   ChatResult, HealthInfo, HitMode, HitResult, Persona, SessionInfo, UploadResult,
 } from './types'
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init)
+/**
+ * 后端地址：
+ *  - 开发时留空（走 vite 代理到 127.0.0.1:8000）
+ *  - 分离部署时在 .env 里设 VITE_API_BASE=https://your-api.onrender.com
+ */
+const BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/+$/, '') ?? ''
+
+async function jsonFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, init)
   if (!res.ok) {
     let detail = res.statusText
     try {
