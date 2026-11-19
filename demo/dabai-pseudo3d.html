@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>沙袋大白 · 伪3D 超低配</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:"Microsoft YaHei",system-ui,sans-serif;
+    background:#1a1614;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:10px;color:#3d2f27;overflow:hidden;
+  }
+  .app{width:100%;max-width:430px}
+
+  /* ===== 房间 ===== */
+  .stage{
+    position:relative;height:470px;border-radius:22px;overflow:hidden;
+    perspective:900px;perspective-origin:50% 40%;
+    background:radial-gradient(ellipse 80% 70% at 50% 18%,#fff 0%,#f4ece3 55%,#e5d8c8 100%);
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .wall{position:absolute;inset:0 0 36% 0;
+    background:radial-gradient(ellipse 70% 60% at 50% 25%,#ffffff,#efe6dc 70%,#e3d7c9);
+    box-shadow:inset 0 -30px 50px -35px rgba(150,120,95,.4)}
+  .board{position:absolute;left:9%;top:12%;width:26%;height:40%;border-radius:9px;
+    background:linear-gradient(150deg,#e9d5b9,#dcc0a0);opacity:.7;
+    box-shadow:0 4px 12px rgba(140,105,75,.25),inset 0 0 0 3px rgba(255,255,255,.5)}
+  .floor{position:absolute;inset:64% 0 0 0;transform:rotateX(50deg);transform-origin:top center;
+    background:linear-gradient(180deg,#efe6db,#e2d5c6 55%,#d7c7b5);
+    box-shadow:inset 0 24px 36px -24px rgba(120,95,70,.4)}
+  .floor::after{content:"";position:absolute;inset:0;opacity:.45;
+    background-image:linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px);
+    background-size:44px 44px}
+  .glow{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(circle at 50% 12%,rgba(255,255,255,.95),transparent 58%)}
+
+  /* ===== 大白容器（3D 倾斜）===== */
+  .dabai{position:absolute;left:50%;bottom:58px;width:300px;height:400px;
+    margin-left:-150px;transform-style:preserve-3d;
+    transform:rotateX(4deg) rotateY(-7deg);
+    transition:transform .5s cubic-bezier(.2,.8,.2,1),filter .4s;cursor:crosshair}
+  .dabai.ko{transform:rotateX(14deg) rotateY(-14deg) rotate(-9deg) translateY(54px) scaleY(.5) scaleX(1.1);
+    filter:saturate(.5) brightness(.95);cursor:not-allowed}
+  .dabai.shake{animation:sh .34s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes sh{
+    0%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}
+    25%{transform:rotateX(4deg) rotateY(-7deg) translate(-8px,3px) rotate(-1.6deg)}
+    55%{transform:rotateX(4deg) rotateY(-7deg) translate(7px,-3px) rotate(1.2deg)}
+    100%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}}
+  .dabai.inflate{animation:inf 2s cubic-bezier(.34,1.4,.64,1)}
+  @keyframes inf{
+    0%{transform:rotateX(14deg) rotateY(-14deg) rotate(-9deg) translateY(54px) scaleY(.5) scaleX(1.1)}
+    45%{transform:rotateX(2deg) rotateY(-4deg) translateY(-6px) scaleY(1.12) scaleX(.94)}
+    75%{transform:rotateX(4deg) rotateY(-7deg) scaleY(.96) scaleX(1.02)}
+    100%{transform:rotateX(4deg) rotateY(-7deg)}}
+
+  svg{display:block;width:100%;height:100%;overflow:visible}
+  .part{cursor:crosshair}
+  .part:hover{filter:brightness(1.04)}
+
+  /* 影 */
+  .shadow{position:absolute;left:50%;bottom:44px;width:200px;height:32px;margin-left:-100px;
+    border-radius:50%;background:radial-gradient(ellipse,rgba(120,95,70,.34),transparent 72%);
+    transition:width .5s,opacity .5s;pointer-events:none}
+  .shadow.ko{width:250px;opacity:.55}
+
+  /* 凹痕 / 光圈 / 飘字 */
+  .dent{position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(90,60,45,.45),rgba(90,60,45,.18) 45%,transparent 72%);
+    animation:dent .62s cubic-bezier(.2,.9,.3,1.2) forwards}
+  @keyframes dent{
+    0%{transform:translate(-50%,-50%) scale(.3);opacity:0}
+    18%{transform:translate(-50%,-50%) scale(1.15);opacity:1}
+    50%{transform:translate(-50%,-50%) scale(.95);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+  .ring{position:absolute;border-radius:50%;border:3px solid rgba(255,255,255,.95);pointer-events:none;
+    animation:ring .5s ease-out forwards}
+  @keyframes ring{0%{transform:translate(-50%,-50%) scale(.2);opacity:.95}
+    100%{transform:translate(-50%,-50%) scale(2.1);opacity:0}}
+  /* ===== 武器实体 ===== */
+  .wpn{position:absolute;pointer-events:none;z-index:5;will-change:transform}
+  .wpn-fist{width:44px;height:40px;border-radius:14px 16px 18px 16px;
+    background:radial-gradient(circle at 34% 28%,#fff,#f0e4d6 60%,#d9c6b2);
+    box-shadow:0 6px 16px rgba(120,90,65,.35),inset -4px -6px 10px rgba(160,130,105,.35)}
+  .wpn-glove{width:56px;height:52px;border-radius:18px;
+    background:radial-gradient(circle at 32% 26%,#ff7a5c,#e8341f 62%,#b8180a);
+    box-shadow:0 8px 20px rgba(180,40,25,.45),inset -5px -7px 12px rgba(120,10,0,.45)}
+  .wpn-glove::after{content:"";position:absolute;left:6px;top:-8px;width:44px;height:14px;border-radius:8px;
+    background:linear-gradient(180deg,#ff6b4d,#c22110);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+  .wpn-rock{width:46px;height:42px;
+    background:linear-gradient(150deg,#b9b2a8,#8d857a 55%,#6b645b);
+    border-radius:52% 48% 44% 56%/48% 54% 46% 52%;
+    box-shadow:0 8px 18px rgba(0,0,0,.35),inset -4px -5px 10px rgba(50,45,40,.5),inset 4px 4px 8px rgba(255,255,255,.35)}
+  /* 飞入动画 */
+  .wpn-fist{animation:fistIn .26s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes fistIn{
+    0%{transform:translate(calc(-50% - 130px),-50%) scale(.7);opacity:0}
+    40%{opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.06);opacity:1}
+  }
+  .wpn-glove{animation:gloveIn .42s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes gloveIn{
+    0%{transform:translate(calc(-50% + 160px),calc(-50% + 30px)) scale(.6) rotate(18deg);opacity:0}
+    35%{transform:translate(calc(-50% + 90px),calc(-50% + 10px)) scale(.85) rotate(8deg);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.12) rotate(0);opacity:1}
+  }
+  .wpn-rock{animation:rockIn .5s cubic-bezier(.4,.1,.7,1) forwards}
+  @keyframes rockIn{
+    0%{transform:translate(calc(-50% - 150px),calc(-50% - 170px)) scale(.5) rotate(-200deg);opacity:0}
+    25%{opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.05) rotate(60deg);opacity:1}
+  }
+  .wpn.out{animation:wpnOut .3s ease-out forwards}
+  @keyframes wpnOut{100%{opacity:0;transform:translate(-50%,-50%) scale(.7)}}
+  /* 石头落地尘土 */
+  .dust{position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(160,140,120,.55),transparent 70%);
+    animation:dust .6s ease-out forwards}
+  @keyframes dust{0%{transform:translate(-50%,-50%) scale(.4);opacity:.9}
+    100%{transform:translate(-50%,-50%) scale(2.4);opacity:0}}
+  .stk{position:absolute;padding:5px 11px;font-size:12px;font-weight:700;border-radius:12px 12px 12px 3px;
+    background:#fff;color:#8a6a4f;box-shadow:0 5px 14px rgba(150,115,90,.3);pointer-events:none;
+    animation:si .3s cubic-bezier(.2,.9,.3,1.3),so .4s 2.4s forwards}
+  @keyframes si{0%{transform:translateY(8px) scale(.7);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+  @keyframes so{100%{opacity:0;transform:translateY(-8px)}}
+
+  /* ===== 底部 UI ===== */
+  .hud{margin-top:10px;background:#fff;border-radius:16px;padding:12px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .row1{display:flex;justify-content:space-between;font-size:12px;color:#a08b7c;margin-bottom:6px}
+  .row1 b{color:#3d2f27;font-size:15px}
+  .bar{height:12px;border-radius:99px;background:#f0e2d6;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,#ffb27a,#ff6a3d);transition:width .3s}
+  .bar.ko i{background:linear-gradient(90deg,#c9d6e2,#a8b8c8)}
+  .tip{height:18px;font-size:12px;font-weight:800;color:#ff6a3d;text-align:center;margin-top:5px}
+  .acts{display:flex;gap:8px;margin-top:10px}
+  .act{flex:1;height:62px;border:0;border-radius:15px;background:#fff;color:#6b5748;
+    font-family:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:2px;cursor:pointer;box-shadow:0 5px 14px rgba(0,0,0,.35);transition:.12s}
+  .act span{font-size:20px;line-height:1}
+  .act small{font-size:10px;opacity:.6}
+  .act.on{background:linear-gradient(160deg,#ff9a62,#ff6a3d);color:#fff}
+  .act:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ===== 上传遮罩 ===== */
+  .uploader{
+    position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    background:rgba(28,22,19,.82);backdrop-filter:blur(6px);border-radius:22px;
+    transition:opacity .4s;
+  }
+  .uploader.hide{opacity:0;pointer-events:none}
+  .uploader h2{color:#fff;font-size:17px;font-weight:800;letter-spacing:1px}
+  .uploader p{color:#c9b8a8;font-size:12px;text-align:center;line-height:1.8}
+  .upbox{width:104px;height:104px;border-radius:18px;border:2px dashed #b99a80;
+    display:flex;align-items:center;justify-content:center;font-size:30px;color:#b99a80;
+    cursor:pointer;overflow:hidden;background:rgba(255,255,255,.06)}
+  .upbox img{width:100%;height:100%;object-fit:cover}
+  .upname{width:190px;height:38px;border-radius:10px;border:1px solid #5a4a3d;
+    background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:13px;
+    text-align:center;outline:none}
+  .upname::placeholder{color:#8a7666}
+  .upbtn{width:150px;height:40px;border:0;border-radius:11px;font-family:inherit;
+    font-size:14px;font-weight:800;color:#fff;cursor:pointer;
+    background:linear-gradient(160deg,#ff9a62,#ff6a3d);box-shadow:0 8px 20px rgba(255,106,61,.4)}
+  .upbtn:disabled{opacity:.45;cursor:not-allowed}
+  /* 墙上的目标照片 */
+  .board{overflow:hidden}
+  .board img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}
+  /* 目标名字标签 */
+  .target-tag{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    padding:5px 14px;border-radius:99px;background:rgba(255,255,255,.86);
+    font-size:12px;font-weight:800;color:#8a3d1c;letter-spacing:1px;
+    box-shadow:0 4px 14px rgba(150,110,80,.3);max-width:70%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .namerow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .namerow span{font-size:12px;color:#a08b7c;white-space:nowrap}
+  .namerow input{flex:1;height:32px;border:1px solid #e7d9cc;border-radius:9px;
+    background:#fdf7f1;color:#5a4a3d;font-family:inherit;font-size:13px;padding:0 10px;outline:none}
+  .namerow input::placeholder{color:#c0ad9c}
+</style>
+</head>
+<body>
+<div class="app">
+  <input type="file" id="filePick" accept="image/*" style="display:none">
+  <div class="stage" id="stage">
+    <div class="wall"><div class="board" id="board"></div></div>
+    <div class="target-tag" id="targetTag" style="display:none"></div>
+    <div class="floor"></div>
+    <div class="glow"></div>
+    <div class="shadow" id="shadow"></div>
+    <div class="dabai" id="dabai">
+      <svg viewBox="0 0 300 400" id="svg">
+        <defs>
+          <radialGradient id="gBody" cx="38%" cy="26%" r="78%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="55%" stop-color="#f6f1ea"/>
+            <stop offset="100%" stop-color="#ddd0c1"/>
+          </radialGradient>
+          <radialGradient id="gLimb" cx="36%" cy="24%" r="80%">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="60%" stop-color="#f4eee7"/>
+            <stop offset="100%" stop-color="#d9cbbc"/>
+          </radialGradient>
+          <radialGradient id="gDent" cx="50%" cy="40%" r="60%">
+            <stop offset="0%" stop-color="rgba(120,90,70,.55)"/>
+            <stop offset="100%" stop-color="rgba(120,90,70,0)"/>
+          </radialGradient>
+          <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+          <clipPath id="faceClip"><ellipse cx="150" cy="132" rx="64" ry="62"/></clipPath>
+          <radialGradient id="photoShade" cx="34%" cy="26%" r="82%">
+            <stop offset="0%" stop-color="rgba(255,255,255,.5)"/>
+            <stop offset="38%" stop-color="rgba(255,255,255,.05)"/>
+            <stop offset="72%" stop-color="rgba(60,40,30,.10)"/>
+            <stop offset="100%" stop-color="rgba(45,30,22,.42)"/>
+          </radialGradient>
+          <radialGradient id="photoRim" cx="50%" cy="50%" r="50%">
+            <stop offset="74%" stop-color="rgba(120,95,75,0)"/>
+            <stop offset="94%" stop-color="rgba(120,95,75,.30)"/>
+            <stop offset="100%" stop-color="rgba(120,95,75,.5)"/>
+          </radialGradient>
+        </defs>
+
+        <!-- 腿 -->
+        <g class="part" id="footG" data-part="foot">
+          <ellipse cx="112" cy="352" rx="30" ry="34" fill="url(#gLimb)"/>
+          <ellipse cx="188" cy="352" rx="30" ry="34" fill="url(#gLimb)"/>
+        </g>
+        <!-- 手臂 -->
+        <g class="part" id="handG" data-part="hand">
+          <ellipse cx="62" cy="252" rx="26" ry="46" fill="url(#gLimb)" transform="rotate(-12 62 252)"/>
+          <ellipse cx="238" cy="252" rx="26" ry="46" fill="url(#gLimb)" transform="rotate(12 238 252)"/>
+        </g>
+        <!-- 躯干 -->
+        <g class="part" id="bellyG" data-part="belly">
+          <ellipse cx="150" cy="272" rx="78" ry="86" fill="url(#gBody)"/>
+        </g>
+        <!-- 头 -->
+        <g class="part" id="headG" data-part="head">
+          <ellipse cx="150" cy="132" rx="92" ry="88" fill="url(#gBody)"/>
+        </g>
+        <!-- 脸 -->
+        <g class="part" id="faceG" data-part="face">
+          <g id="faceUploadHint" style="cursor:pointer">
+            <ellipse cx="150" cy="132" rx="62" ry="60" fill="rgba(255,255,255,.5)"
+                     stroke="rgba(180,150,120,.85)" stroke-width="2" stroke-dasharray="7 6"/>
+            <text x="150" y="128" text-anchor="middle" font-size="15" font-weight="700" fill="#a8876a">＋ 点击上传</text>
+            <text x="150" y="150" text-anchor="middle" font-size="12" fill="#bda184">照片</text>
+          </g>
+          <g id="photoSlot" style="display:none">
+            <image id="targetPhoto" x="84" y="62" width="132" height="140"
+                   preserveAspectRatio="xMidYMid slice" clip-path="url(#faceClip)"/>
+            <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoShade)" style="pointer-events:none"/>
+            <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoRim)" style="pointer-events:none"/>
+          </g>
+          <rect x="112" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
+          <rect x="170" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
+          <circle cx="117" cy="120" r="3.4" fill="#fff" opacity=".9"/>
+          <circle cx="175" cy="120" r="3.4" fill="#fff" opacity=".9"/>
+          <rect x="138" y="158" width="24" height="4" rx="2" fill="#2f2b28" opacity=".5" id="mouth"/>
+        </g>
+        <g id="decals"></g>
+      </svg>
+    </div>
+    <div id="fx"></div>
+    </div>
+  
+
+  <div class="hud">
+    <div class="namerow">
+      <span>我在打：</span>
+      <input id="nameInput" maxlength="12" placeholder="给它起个名字">
+    </div>
+    <div class="row1"><span>伤害</span><b><span id="dmgNum">0</span> / 40</b></div>
+    <div class="bar" id="bar"><i id="barFill" style="width:0%"></i></div>
+    <div class="tip" id="tip"></div>
+    <div class="acts">
+      <button class="act on" data-tool="fist"><span>✊</span>拳头<small>+1</small></button>
+      <button class="act" data-tool="glove"><span>🥊</span>拳套<small>+3</small></button>
+      <button class="act" data-tool="rock"><span>🪨</span>石头<small>+6</small></button>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAX = 40;
+const DMG = { fist: 1, glove: 3, rock: 6 };
+const PART_NAME = { head:'头', face:'脸', hand:'手', belly:'肚子', foot:'脚' };
+const LINES = {
+  head:  ['头上被敲了一下…','有点晕…','别打头好不好…'],
+  face:  ['脸被打了…','眼睛有点花…','我有点想哭…'],
+  hand:  ['手被打到了…','手臂发麻…','……握不住了'],
+  belly: ['肚子好痛…','肚子瘪下去了…','喘不过气…'],
+  foot:  ['脚被打到了…','站不稳了…','我快倒了…'],
+};
+
+let total = 0;
+let partHits = { head:0, face:0, hand:0, belly:0, foot:0 };
+let tool = 'fist';
+let ko = false;
+let koTimer = null;
+let koCount = 0;
+
+const $ = s => document.querySelector(s);
+const dabai = $('#dabai'), fx = $('#fx'), svg = $('#svg'), decals = $('#decals');
+
+/* ===== 音效：WebAudio 合成 ===== */
+let ac = null;
+function beep(type){
+  try{
+    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    const t = ac.currentTime;
+    if(type === 'leak'){
+      const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
+      o.type='sawtooth'; o.frequency.setValueAtTime(220,t); o.frequency.exponentialRampToValueAtTime(60,t+1.6);
+      f.type='bandpass'; f.frequency.value=900;
+      g.gain.setValueAtTime(.10,t); g.gain.exponentialRampToValueAtTime(.001,t+1.7);
+      o.connect(f).connect(g).connect(ac.destination); o.start(t); o.stop(t+1.8); return;
+    }
+    if(type === 'inflate'){
+      const o = ac.createOscillator(), g = ac.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(120,t); o.frequency.exponentialRampToValueAtTime(520,t+1.4);
+      g.gain.setValueAtTime(.001,t); g.gain.linearRampToValueAtTime(.16,t+.2);
+      g.gain.exponentialRampToValueAtTime(.001,t+1.6);
+      o.connect(g).connect(ac.destination); o.start(t); o.stop(t+1.7); return;
+    }
+    const base = type==='rock' ? 90 : type==='glove' ? 140 : 190;
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(base,t); o.frequency.exponentialRampToValueAtTime(45,t+.16);
+    g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.26,t+.008);
+    g.gain.exponentialRampToValueAtTime(.0001,t+.24);
+    o.connect(g).connect(ac.destination); o.start(t); o.stop(t+.26);
+    const b = ac.createBufferSource(), len = Math.floor(ac.sampleRate*.05);
+    const buf = ac.createBuffer(1,len,ac.sampleRate), d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i] = (Math.random()*2-1)*Math.pow(1-i/len,3);
+    b.buffer = buf; const g2 = ac.createGain(); g2.gain.value = .14;
+    b.connect(g2).connect(ac.destination); b.start(t);
+  }catch(e){}
+}
+
+/* ===== 命中 ===== */
+function toSvgPoint(evt){
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+$('#svg').addEventListener('pointerdown', e => {
+  if(ko) return;
+  const part = e.target.closest('.part');
+  if(!part) return;
+  const name = part.dataset.part;
+  const r = $('.stage').getBoundingClientRect();
+  const viewX = e.clientX - r.left, viewY = e.clientY - r.top;   // 屏幕坐标（放武器/凹痕）
+  const sp = toSvgPoint(e);                                       // SVG 坐标（放贴花，随形变）
+  hit(name, viewX, viewY, sp.x, sp.y);
+});
+
+function hit(part, x, y, sx, sy){
+  const d = DMG[tool];
+  total = Math.min(MAX, total + d);
+  partHits[part] = (partHits[part]||0) + 1;
+
+  dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake');
+  beep(tool);
+  spawnWeapon(tool, x, y);
+  spawnDent(x, y);
+  spawnRing(x, y, tool);
+  addDecal(part, partHits[part], sx, sy);
+  deformPart(part, sx, sy, partHits[part]);
+  if(partHits[part] === 1 || partHits[part] === 4) showSticker(part, LINES[part][Math.min(2, Math.floor(partHits[part]/3))] );
+
+  updateHUD();
+  if(total >= MAX) knockout();
+}
+
+function spawnDent(x,y){
+  const d = document.createElement('div');
+  d.className='dent';
+  const size = 46 + Math.random()*16;
+  d.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
+  fx.appendChild(d); setTimeout(()=>d.remove(), 700);
+}
+function spawnRing(x,y,t){
+  const r = document.createElement('div');
+  r.className='ring';
+  const size = t==='rock' ? 40 : t==='glove' ? 34 : 26;
+  r.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
+  if(t==='rock') r.style.borderColor='rgba(255,120,60,.95)';
+  fx.appendChild(r); setTimeout(()=>r.remove(), 560);
+}
+/* ===== 分部位差异化变形 ===== */
+function deformPart(part, sx, sy, n){
+  const map = { head:'headG', face:'faceG', hand:'handG', belly:'bellyG', foot:'footG' };
+  const g = svg.querySelector('#' + map[part]);
+  if(g){
+    g.classList.remove('def-' + part);
+    void g.getBoundingClientRect();
+    g.classList.add('def-' + part);
+  }
+  const jx = (sx !== undefined ? sx : 150), jy = (sy !== undefined ? sy : 250);
+
+  if(part === 'head'){
+    // 起包（第 1 次就有）+ 眩晕星星（第 3 次起）
+    addSvg('ellipse', { cx: jx, cy: Math.max(46, jy - 18), rx: 11, ry: 8,
+      fill: 'rgba(236,160,150,.85)', stroke: 'rgba(200,120,110,.6)', 'stroke-width': 1.5 });
+    if(n === 1 || n === 3) spawnStars(jx, Math.max(40, jy - 52));
+    if(n >= 3){
+      // 眼圈发黑
+      [121, 179].forEach(xx => addSvg('ellipse', { cx: xx, cy: 126, rx: 16, ry: 21,
+        fill: 'rgba(120,90,160,.28)' }));
+    }
+  }
+  if(part === 'face'){
+    if(n >= 2) spawnTears(jx, jy);
+    if(n >= 3) addSvg('path', { d: 'M132 172 q18 14 36 0', stroke: '#2f2b28',
+      'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round', opacity: .75 });
+  }
+  if(part === 'hand'){
+    if(n >= 2) addSvg('rect', { x: jx - 22, y: jy - 30, width: 44, height: 12, rx: 4,
+      fill: '#fdf6ec', stroke: '#e0cdb6', transform: `rotate(${-18} ${jx} ${jy})` });
+  }
+  if(part === 'belly'){
+    if(n >= 2) addSvg('ellipse', { cx: jx, cy: jy, rx: 26, ry: 20, fill: 'url(#gDent)' });
+    if(n >= 4){
+      // 漏气：肚子局部瘪下去
+      const b = svg.querySelector('#bellyG');
+      if(b) b.setAttribute('transform', 'translate(0,6) scale(0.94,0.92)');
+    }
+  }
+  if(part === 'foot'){
+    if(n >= 2){ dabai.classList.add('wobble'); }
+    if(n >= 3) addSvg('ellipse', { cx: jx, cy: jy + 6, rx: 18, ry: 12, fill: 'rgba(120,78,168,.4)' });
+  }
+}
+function addSvg(tag, attrs){
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);
+  el.setAttribute("class", part + "-mark");
+  decals.appendChild(el);
+  return el;
+}
+function spawnStars(x, y){
+  const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.setAttribute('class','stars');
+  ['★','☆','★'].forEach((s,i)=>{
+    const t2 = document.createElementNS('http://www.w3.org/2000/svg','text');
+    t2.textContent = s;
+    t2.setAttribute('x', x - 34 + i*30);
+    t2.setAttribute('y', y);
+    t2.setAttribute('font-size', '17');
+    t2.setAttribute('fill', '#ffc94a');
+    t2.setAttribute('text-anchor','middle');
+    g.appendChild(t2);
+  });
+  decals.appendChild(g);
+  setTimeout(()=>g.remove(), 3000);
+}
+function spawnTears(x, y){
+  let layer = svg.querySelector('#tearLayer');
+  if(!layer){
+    layer = document.createElementNS('http://www.w3.org/2000/svg','g');
+    layer.setAttribute('id','tearLayer');
+    svg.appendChild(layer);
+  }
+  [x - 30, x + 30].forEach((xx, i) => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    c.setAttribute('cx', Math.max(60, Math.min(240, xx)));
+    c.setAttribute('cy', y + 30);
+    c.setAttribute('rx', 5); c.setAttribute('ry', 8);
+    c.setAttribute('fill', '#8ecdf5');
+    c.setAttribute('class','tear');
+    c.style.animationDelay = (i*0.35) + 's';
+    layer.appendChild(c);
+    setTimeout(()=>c.remove(), 5000);
+  });
+}
+
+function spawnWeapon(t, x, y){
+  const el = document.createElement('div');
+  el.className = 'wpn wpn-' + (t === 'fist' ? 'fist' : t === 'glove' ? 'glove' : 'rock');
+  el.style.cssText = `left:${x}px;top:${y}px;transform:translate(-50%,-50%)`;
+  fx.appendChild(el);
+  const hold = t === 'rock' ? 420 : t === 'glove' ? 360 : 220;
+  setTimeout(()=>{
+    el.classList.add('out');
+    setTimeout(()=>el.remove(), 320);
+    if(t === 'rock'){
+      const d = document.createElement('div');
+      d.className='dust';
+      d.style.cssText = `left:${x}px;top:${y+10}px;width:70px;height:70px`;
+      fx.appendChild(d); setTimeout(()=>d.remove(), 640);
+    }
+  }, hold);
+}
+function showSticker(part, text){
+  const el = document.createElement('div');
+  el.className='stk'; el.textContent = text;
+  el.style.cssText = `left:${92 + Math.random()*120}px;top:${70 + Math.random()*40}px`;
+  fx.appendChild(el); setTimeout(()=>el.remove(), 3000);
+}
+
+/* ===== 贴花：按部位命中次数叠加 ===== */
+function addDecal(part, n, x, y){
+  // 精确落在点击位置，只做极小抖动，避免完全重叠
+  const jx = (x !== undefined ? x : 150) + (Math.random()*10-5);
+  const jy = (y !== undefined ? y : 250) + (Math.random()*10-5);
+  let el;
+  // 每部位贴花上限 8 个，避免糊成一团
+  const same = [...decals.querySelectorAll('.' + part + '-mark')];
+  if(same.length >= 8){ same[0].remove(); }
+  if(n <= 2){                      // 红印：小、偏、不规则
+    el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    el.setAttribute('cx',jx); el.setAttribute('cy',jy);
+    el.setAttribute('rx',7+Math.random()*4); el.setAttribute('ry',6+Math.random()*3);
+    el.setAttribute('fill','rgba(214,96,80,.34)');
+    el.setAttribute('transform',`rotate(${Math.random()*90-45} ${jx} ${jy})`);
+  } else if(n <= 5){               // 淤青：偏紫、小
+    el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+    el.setAttribute('cx',jx); el.setAttribute('cy',jy);
+    el.setAttribute('rx',8+Math.random()*5); el.setAttribute('ry',7+Math.random()*4);
+    el.setAttribute('fill','rgba(122,86,164,.34)');
+    el.setAttribute('transform',`rotate(${Math.random()*90-45} ${jx} ${jy})`);
+  } else {                         // 创可贴 / 绷带条
+    el = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    const w = 26, h = 9;
+    el.setAttribute('x', jx-w/2); el.setAttribute('y', jy-h/2);
+    el.setAttribute('width',w); el.setAttribute('height',h);
+    el.setAttribute('rx',3);
+    el.setAttribute('fill','#fdf6ec'); el.setAttribute('stroke','#e0cdb6');
+    el.setAttribute('transform',`rotate(${Math.random()*80-40} ${jx} ${jy})`);
+  }
+  el.setAttribute("class", part + "-mark");
+  decals.appendChild(el);
+}
+
+function updateHUD(){
+  $('#dmgNum').textContent = total;
+  $('#barFill').style.width = (total/MAX*100)+'%';
+  const t = $('#tip');
+  if(ko){ t.textContent = '💨 已经泄气了…'; return; }
+  if(total === 0) t.textContent = '';
+  else if(total < 13) t.textContent = 'Lv1 · 有点疼…';
+  else if(total < 26) t.textContent = 'Lv2 · 好委屈';
+  else if(total < 40) t.textContent = 'Lv3 · 快撑不住了';
+}
+
+/* ===== KO / 复活 ===== */
+function knockout(){
+  ko = true; koCount++;
+  dabai.classList.add('ko');
+  $('#shadow').classList.add('ko');
+  $('#bar').classList.add('ko');
+  document.querySelectorAll('.act').forEach(b=>b.disabled=true);
+  beep('leak');
+  $('#tip').textContent = koCount === 1 ? '💨 泄气了… 12 秒后充气' : '💨 又泄气了… 它有点委屈';
+  $('#mouth') && $('#mouth').setAttribute('fill','#2f2b28');
+
+  let left = 12;
+  const cd = setInterval(()=>{
+    left--;
+    $('#tip').textContent = `💨 泄气了… ${left} 秒后自动充气`;
+    if(left <= 0){ clearInterval(cd); revive(); }
+  }, 1000);
+  koTimer = cd;
+}
+
+function revive(){
+  ko = false;
+  dabai.classList.remove('ko');
+  dabai.classList.add('inflate');
+  $('#shadow').classList.remove('ko');
+  $('#bar').classList.remove('ko');
+  beep('inflate');
+  setTimeout(()=>{
+    total = 0;
+    partHits = { head:0, face:0, hand:0, belly:0, foot:0 };
+    decals.innerHTML = '';
+    dabai.classList.remove('inflate');
+    document.querySelectorAll('.act').forEach(b=>b.disabled=false);
+    updateHUD();
+    $('#tip').textContent = '重新充好气了';
+    setTimeout(()=>{ if(!ko) $('#tip').textContent=''; }, 2000);
+  }, 1900);
+}
+
+/* ===== 工具切换 ===== */
+document.querySelectorAll('.act').forEach(b=>{
+  b.onclick = ()=>{
+    if(ko) return;
+    document.querySelectorAll('.act').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    tool = b.dataset.tool;
+  };
+});
+
+updateHUD();
+/* ===== 上传 + 命名（照片直接盖到脸上） ===== */
+let targetImg = null, targetName = '';
+const nameInput = $('#nameInput');
+const tagEl = $('#targetTag');
+
+$('#faceUploadHint').addEventListener('pointerdown', e => {
+  e.stopPropagation();
+  $('#filePick').click();
+});
+$('#filePick').addEventListener('change', e => {
+  const f = e.target.files && e.target.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    targetImg = reader.result;
+    const img = $('#targetPhoto');
+    img.setAttribute('href', targetImg);
+    img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', targetImg);
+    $('#faceUploadHint').style.display = 'none';   // 占位消失
+    $('#photoSlot').style.display = '';            // 照片盖到脸上
+    tagEl.style.display = 'block';
+    tagEl.textContent = '正在打：' + (nameInput.value.trim() || '那个东西');
+  };
+  reader.readAsDataURL(f);
+});
+nameInput.addEventListener('input', () => {
+  targetName = nameInput.value.trim();
+  if($('#photoSlot').style.display !== 'none'){
+    tagEl.textContent = '正在打：' + (targetName || '那个东西');
+  }
+});
+/* URL 参数方便截图：?dmg=30 / ?ko=1 */
+const q = new URLSearchParams(location.search);
+if(q.get('dmg')){
+  const target = Math.max(0, Math.min(MAX-1, +q.get('dmg')));
+  let guard = 0;
+  while(total < target && guard++ < 200){ hit('belly', 150, 250); }
+}
+if(q.get('skip') === '1'){
+  // 截图/验收用：跳过上传
+  $('#faceUploadHint').style.display = 'none';
+  const tag = $('#targetTag');
+  tag.textContent = '正在打：' + (q.get('name') || '那台破空调');
+  tag.style.display = 'block';
+  $('#photoSlot').style.display = '';
+  const ph = $('#targetPhoto');
+  const fake = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="112" height="120"><rect width="112" height="120" fill="#9c8b7c"/><circle cx="56" cy="46" r="20" fill="#6f6156"/><rect x="26" y="72" width="60" height="42" rx="18" fill="#6f6156"/></svg>');
+  ph.setAttribute('href', fake);
+  ph.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href', fake);
+}
+if(q.get('auto')){
+  // ?auto=head3,face3,belly3,foot2  便于截图/验收
+  q.get('auto').split(',').forEach(seg => {
+    const m = seg.match(/([a-z]+)(\d+)/);
+    if(!m) return;
+    const part = m[1], times = +m[2];
+    const g = svg.querySelector('.part[data-part="' + part + '"]');
+    if(!g) return;
+    const bb = g.getBBox();
+    const pt = svg.createSVGPoint();
+    pt.x = bb.x + bb.width / 2;
+    pt.y = bb.y + bb.height / 2;
+    const scr = pt.matrixTransform(svg.getScreenCTM());
+    const r = $('.stage').getBoundingClientRect();
+    for(let i = 0; i < times; i++){
+      try{ hit(part, scr.x - r.left, scr.y - r.top, pt.x, pt.y); }
+      catch(err){ console.error('hit error', part, err); document.title = 'ERR:' + err.message; }
+    }
+    updateHUD();
+  });
+}
+if(q.get('ko') === '1'){ knockout(); }
+</script>
+</body>
+</html>

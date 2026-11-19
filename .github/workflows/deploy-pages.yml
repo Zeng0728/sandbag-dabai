@@ -40,6 +40,13 @@ jobs:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
         run: npm run build
 
+      # 把 demo 目录（单文件试验版）一起发布，方便手机上直接试
+      - name: Copy demo into dist
+        run: |
+          mkdir -p frontend/dist/demo
+          cp -r frontend/dist/../demo/* frontend/dist/demo/ 2>/dev/null || true
+          ls -la frontend/dist/demo || true
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist
