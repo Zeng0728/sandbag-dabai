@@ -1028,6 +1028,36 @@ function fallbackLine(lv){
   fbCursor[lv] = i + 1;
   return arr[i];
 }
+
+/* 从用户输入里抓一个"关键词"，让回复显得在听 */
+const STOP_WORDS = ['今天','真的','就是','这个','那个','感觉','有点','特别','非常','然后','但是','所以','因为','我们','他们','你们'];
+function extractKeyword(text){
+  const t = (text || '').replace(/[，。！？、,.!?\s]+/g, ' ').trim();
+  if(!t) return '';
+  const parts = t.split(' ').filter(w => w.length >= 2 && STOP_WORDS.indexOf(w) < 0);
+  if(!parts.length) return '';
+  parts.sort((a, b) => b.length - a.length);
+  const w = parts[0];
+  return w.length > 6 ? w.slice(0, 6) : w;
+}
+/* 追问式尾巴，让回复有"接话"的感觉 */
+const TAILS = {
+  1: ['你接着说。','然后呢？','想聊就聊。','说多久都行。'],
+  2: ['要不要跟我说说？','别一个人憋着。','我听着。','说出来会轻一点。'],
+  3: ['想骂就骂。','你可以冲我来。','我不走。','气出来就好。'],
+  4: ['……我在这。','你先缓缓。','不用说了，我懂。','我等你。']
+};
+function composeReply(text, lv){
+  const core = fallbackLine(lv);
+  const kw = extractKeyword(text);
+  const tail = TAILS[lv] ? TAILS[lv][Math.floor(Math.random() * TAILS[lv].length)] : '';
+  const r = Math.random();
+  if(kw && r < 0.45) return '「' + kw + '」这事儿…' + core;
+  if(kw && r < 0.7) return core + '「' + kw + '」，我记住了。';
+  if(tail && r < 0.88) return core + tail;
+  return core;
+}
+
 const STICKER_BY_LV = { 1:'我在听', 2:'委屈', 3:'吓到', 4:'安静' };
 
 const BODY_CLASSES = ['act-lean','act-shrink','act-recoil','act-low'];
@@ -1051,9 +1081,10 @@ function applyEmotion(lv){
     // 倒地时打字：不能起身，只让眼睛闪一下 + 「我还在」
     const e = $('#eyeL');
     if(e){ e.style.opacity = .9; setTimeout(()=>{ e.style.opacity = .55; }, 260); }
+    const KO_STK = ['我还在听','听着呢','我在这','没走开','你说'];
     const s2 = document.createElement('div');
     s2.className = 'stk';
-    s2.textContent = '我还在听';
+    s2.textContent = KO_STK[(window.__koStk = ((window.__koStk||0)+1)) % KO_STK.length];
     s2.style.cssText = 'left:120px;top:120px';
     fx.appendChild(s2);
     setTimeout(()=>s2.remove(), 2600);
@@ -1099,7 +1130,7 @@ async function sendChat(){
     }
   }catch(e){ /* 断网走兜底 */ }
   if(!reply){
-    reply = fallbackLine(level);
+    reply = composeReply(text, level);
   }
   // 融合规则：刚被打过 → 先让击打反馈演完，0.5 秒后再叠文字表情
   const delay = (Date.now() - lastHitAt < 400) ? 500 : 0;
