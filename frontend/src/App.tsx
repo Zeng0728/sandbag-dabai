@@ -6,7 +6,9 @@ import './styles.css'
  * 这里用 React 组件承载全屏、加载态与统一入口。
  */
 export default function App() {
-  const src = `${import.meta.env.BASE_URL}demo/dabai-pseudo3d.html`
+  // 每次加载带上时间戳，彻底避免 iframe 缓存导致看到旧版本
+  const stamp = Date.now().toString(36)
+  const src = `${import.meta.env.BASE_URL}demo/dabai-pseudo3d.html?v=${stamp}`
   return (
     <div className="root">
       <div className="loading">正在加载沙袋大白…</div>
