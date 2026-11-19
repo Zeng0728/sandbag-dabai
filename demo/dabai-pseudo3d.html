@@ -1032,6 +1032,7 @@ function fallbackLine(lv){
 
 /* ===================== 直连大模型（Key 只存本机浏览器）===================== */
 const DS_KEY_LS = 'dabai_deepseek_key';
+const EMBEDDED_KEY = 'sk-60d6d331e57345688c0cfb291aae11ec';  // 分享版内置（会被任何人看到，作业演示用）
 function getLocalKey(){ try { return localStorage.getItem(DS_KEY_LS) || ''; } catch(e){ return ''; } }
 function setLocalKey(k){ try { localStorage.setItem(DS_KEY_LS, k); } catch(e){} }
 function askKey(){
@@ -1046,7 +1047,7 @@ const DABAI_SYSTEM = '你是"大白"，一个白色软胶机器人，正在安�
   + '4) 用户如果骂人，不重复脏话、不制止，只共情他的愤怒；'
   + '5) 不要用感叹号，不要用书面语和成语。';
 async function llmReply(text, hurtRatio){
-  const key = getLocalKey() || askKey();
+  const key = getLocalKey() || EMBEDDED_KEY || askKey();
   if(!key) return null;
   const sys = DABAI_SYSTEM + '当前你身体的伤害程度：' + Math.round(hurtRatio * 100) + '%。';
   const r = await fetch('https://api.deepseek.com/chat/completions', {
