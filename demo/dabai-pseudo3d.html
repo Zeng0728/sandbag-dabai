@@ -406,6 +406,17 @@ const LINES = {
   foot:  ['脚被打到了…','站不稳了…','我快倒了…'],
 };
 
+
+/* 低配模式：手机或低核设备自动关闭重特效，减少掉帧 */
+const LOWFX_OFF_VOICE = false;
+const LOWFX = (function(){
+  try{
+    const mobile = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    const weak = (navigator.hardwareConcurrency || 8) <= 4;
+    return mobile || weak;
+  }catch(e){ return false; }
+})();
+
 let total = 0;
 let lastHitAt = 0;
 let partHits = { head:0, face:0, hand:0, belly:0, foot:0 };
@@ -422,7 +433,8 @@ let ac = null;
 const PART_PITCH = { head: 1.28, face: 1.16, hand: 1.05, belly: 0.82, foot: 0.92 };
 function beep(type, part){
   try{
-    if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
+    if(!ac){ ac = new (window.AudioContext||window.webkitAudioContext)(); }
+    if(ac.state === 'suspended'){ ac.resume(); }
     const t = ac.currentTime;
     if(type === 'leak'){
       const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
@@ -476,11 +488,11 @@ function hit(part, x, y, sx, sy){
   partHits[part] = (partHits[part]||0) + 1;
   lastHitAt = Date.now();
 
-  dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake');
+  if(!LOWFX){ dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake'); }
   beep(tool, part);
-  spawnWeapon(tool, x, y);
+  if(!LOWFX) spawnWeapon(tool, x, y);
   spawnDent(x, y);
-  spawnRing(x, y, tool);
+  if(tool === 'rock' && !LOWFX) spawnRing(x, y, tool);
   addDecal(part, partHits[part], sx, sy);
   deformPart(part, sx, sy, partHits[part]);
   if(partHits[part] === 1 || partHits[part] === 4) showSticker(part, LINES[part][Math.min(2, Math.floor(partHits[part]/3))] );
@@ -735,7 +747,7 @@ function updateHUD(){
       total < 40 ? '快撑不住了' : '瘫下去了';
   }
   const t = $('#tip');
-  if(ko){ t.textContent = '💨 它瘫下去了，12 秒后自己爬起来'; return; }
+  if(ko){ t.textContent = '💨 它瘫下去了，6 秒后自己爬起来'; return; }
   if(total === 0) t.textContent = '';
   else if(total < 13) t.textContent = '它有点疼…';
   else if(total < 26) t.textContent = '它委屈了';
@@ -752,10 +764,10 @@ function knockout(){
   document.querySelectorAll('.act').forEach(b=>b.disabled=true);
   beep('leak');
   say((koCount >= 2 ? KO_LINE_2 : KO_LINE)[Math.floor(Math.random()*3)], true);
-  $('#tip').textContent = koCount === 1 ? '💨 瘫下去了… 12 秒后自己爬起来' : '💨 又瘫了… 它有点累了';
+  $('#tip').textContent = koCount === 1 ? '💨 瘫下去了… 6 秒后自己爬起来' : '💨 又瘫了… 它有点累了';
   $('#mouth') && $('#mouth').setAttribute('fill','#2f2b28');
 
-  let left = 12;
+  let left = 6;
   const cd = setInterval(()=>{
     left--;
     $('#tip').textContent = `💨 泄气了… ${left} 秒后自动充气`;
@@ -1272,7 +1284,7 @@ if('speechSynthesis' in window){
 }
 /* 伤害越高：语速越慢、音量越低、音调越低（软糯 → 虚弱） */
 function speak(text){
-  if(!voiceOn || !('speechSynthesis' in window)) return;
+  if(!voiceOn || LOWFX_OFF_VOICE || !('speechSynthesis' in window)) return;
   const t2 = (text || '').replace(/[…\.]{2,}/g, '，').trim();
   if(!t2 || t2 === '…') return;
   try{
