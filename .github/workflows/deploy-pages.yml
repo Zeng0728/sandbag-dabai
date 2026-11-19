@@ -44,7 +44,7 @@ jobs:
       - name: Copy demo into dist
         run: |
           mkdir -p frontend/dist/demo
-          cp -r frontend/dist/../demo/* frontend/dist/demo/ 2>/dev/null || true
+          cp -r demo/. frontend/dist/demo/
           ls -la frontend/dist/demo || true
 
       - uses: actions/upload-pages-artifact@v3
