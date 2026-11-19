@@ -149,7 +149,7 @@
   .uploader{
     position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
     align-items:center;justify-content:center;gap:14px;
-    background:rgba(28,22,19,.82);backdrop-filter:blur(6px);border-radius:22px;
+    background:rgba(28,22,19,.82);backdrop-filter:none;border-radius:22px;
     transition:opacity .4s;
   }
   .uploader.hide{opacity:0;pointer-events:none}
@@ -288,12 +288,16 @@
             <stop offset="100%" stop-color="rgba(120,90,70,0)"/>
           </radialGradient>
           <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
+          <radialGradient id="faceFade" cx="50%" cy="50%" r="50%">
+            <stop offset="78%" stop-color="#fff"/>
+            <stop offset="93%" stop-color="#fff" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+          </radialGradient>
           <filter id="feather" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="7"/>
           </filter>
           <mask id="faceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="400">
-            <ellipse cx="150" cy="132" rx="63" ry="61" fill="#fff" filter="url(#feather)"/>
-            <ellipse cx="150" cy="132" rx="58" ry="56" fill="#fff"/>
+            <ellipse cx="150" cy="132" rx="63" ry="61" fill="url(#faceFade)"/>
           </mask>
           <radialGradient id="photoShade" cx="34%" cy="26%" r="82%">
             <stop offset="0%" stop-color="rgba(255,255,255,.5)"/>
@@ -606,7 +610,6 @@ function spawnFaceTears(n){
     path.setAttribute('stroke-width', '4.5');
     path.setAttribute('stroke-linecap', 'round');
     path.setAttribute('fill', 'none');
-    path.style.filter = 'drop-shadow(0 2px 3px rgba(90,160,220,.5))';
     if(HOLD){
       path.setAttribute('stroke-width','6');
       path.setAttribute('d', `M${cx} ${cy} q${side*2} ${len*0.6} ${side*1} ${len*1.6}`);
@@ -695,7 +698,7 @@ function addDecal(part, n, x, y){
   let el;
   // 每部位贴花上限 8 个，避免糊成一团
   const same = [...decals.querySelectorAll('.' + part + '-mark')];
-  if(same.length >= 8){ same[0].remove(); }
+  if(same.length >= 6){ same[0].remove(); }
   if(n <= 2){                      // 红印：小、偏、不规则
     el = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
     el.setAttribute('cx',jx); el.setAttribute('cy',jy);
