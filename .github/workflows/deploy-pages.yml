@@ -41,6 +41,13 @@ jobs:
         run: npm run build
 
       # 把后端地址注入 demo 页面（游戏页面从这里读 API）
+      # 把 demo 目录（单文件试验版）一起发布，方便手机上直接试
+      - name: Copy demo into dist
+        run: |
+          mkdir -p frontend/dist/demo
+          cp -r demo/. frontend/dist/demo/
+          ls -la frontend/dist/demo || true
+
       - name: Inject API base into demo
         run: |
           if [ -n "${{ vars.VITE_API_BASE }}" ]; then
@@ -49,12 +56,6 @@ jobs:
             done
           fi
 
-      # 把 demo 目录（单文件试验版）一起发布，方便手机上直接试
-      - name: Copy demo into dist
-        run: |
-          mkdir -p frontend/dist/demo
-          cp -r demo/. frontend/dist/demo/
-          ls -la frontend/dist/demo || true
 
       - uses: actions/upload-pages-artifact@v3
         with:
