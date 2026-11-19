@@ -49,6 +49,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ---------------------------------------------------------------- .env 读取（无额外依赖）
+def _load_dotenv() -> None:
+    """读取同目录下的 .env；已存在的环境变量优先，不会被覆盖。"""
+    p = Path(__file__).parent / ".env"
+    if not p.exists():
+        return
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_dotenv()
+
 # ---------------------------------------------------------------- 留痕
 def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
