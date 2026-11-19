@@ -281,7 +281,13 @@
             <stop offset="100%" stop-color="rgba(120,90,70,0)"/>
           </radialGradient>
           <filter id="soft"><feGaussianBlur stdDeviation="3"/></filter>
-          <clipPath id="faceClip"><ellipse cx="150" cy="132" rx="64" ry="62"/></clipPath>
+          <filter id="feather" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="7"/>
+          </filter>
+          <mask id="faceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="400">
+            <ellipse cx="150" cy="132" rx="63" ry="61" fill="#fff" filter="url(#feather)"/>
+            <ellipse cx="150" cy="132" rx="58" ry="56" fill="#fff"/>
+          </mask>
           <radialGradient id="photoShade" cx="34%" cy="26%" r="82%">
             <stop offset="0%" stop-color="rgba(255,255,255,.5)"/>
             <stop offset="38%" stop-color="rgba(255,255,255,.05)"/>
@@ -323,7 +329,7 @@
           </g>
           <g id="photoSlot" style="display:none">
             <image id="targetPhoto" x="84" y="62" width="132" height="140"
-                   preserveAspectRatio="xMidYMid slice" clip-path="url(#faceClip)"/>
+                   preserveAspectRatio="xMidYMid slice" mask="url(#faceMask)"/>
             <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoShade)" style="pointer-events:none"/>
             <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoRim)" style="pointer-events:none"/>
           </g>
@@ -540,7 +546,8 @@ function deformPart(part, sx, sy, n){
 /* 人脸识别：优先浏览器 FaceDetector，不支持则用居中启发式 */
 let faceBox = null;   // SVG 坐标系里的脸框 {x,y,w,h}
 async function detectFace(dataUrl){
-  faceBox = null;
+  // 返回归一化脸框 {x,y,w,h}（0~1），供 applyFaceTexture 使用
+  let box = null;
   try{
     if('FaceDetector' in window){
       const img = new Image();
@@ -550,17 +557,17 @@ async function detectFace(dataUrl){
       const faces = await det.detect(img);
       if(faces && faces.length){
         const b = faces[0].boundingBox;
-        // 照片在 SVG 里是 x=84 y=62 w=132 h=140，且 object-fit: slice
-        const scale = Math.max(132 / img.width, 140 / img.height);
-        const drawW = img.width * scale, drawH = img.height * scale;
-        const offX = 84 + (132 - drawW) / 2, offY = 62 + (140 - drawH) / 2;
-        faceBox = { x: offX + b.x * scale, y: offY + b.y * scale, w: b.width * scale, h: b.height * scale };
-        return;
+        box = { x: b.x / img.width, y: b.y / img.height, w: b.width / img.width, h: b.height / img.height };
       }
     }
-  }catch(e){ /* 忽略，走启发式 */ }
-  // 启发式：假设人脸在照片中上部，占 62%
+  }catch(e){ /* 不支持就走启发式 */ }
+  if(!box){
+    // 启发式：人脸一般在中上部，占宽 60%、高 60%
+    box = { x: 0.20, y: 0.10, w: 0.60, h: 0.62 };
+  }
+  // 脸部坐标（SVG 系）仍给眼泪/嘴用
   faceBox = { x: 150 - 40, y: 132 - 42, w: 80, h: 84 };
+  return box;
 }
 
 /* 龇牙咧嘴：受击瞬间出现，0.7 秒后收起 */
@@ -1092,6 +1099,38 @@ async function sendChat(){
 $('#chatSend').addEventListener('click', sendChat);
 $('#chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') sendChat(); });
 
+
+/* ===== 自动人脸抠图：把检测到的脸框铺到目标椭圆上 ===== */
+/* nbox: 归一化脸框 {x,y,w,h}（0~1） */
+function applyFaceTexture(dataUrl, nbox){
+  const ATT = { cx:150, cy:132, rx:63, ry:61, pad:1.12 };
+  const img = new Image();
+  img.onload = () => {
+    const W = img.naturalWidth || 1, H = img.naturalHeight || 1;
+    const b = nbox || { x:0.2, y:0.10, w:0.60, h:0.62 };
+    const bw = Math.max(8, b.w * W), bh = Math.max(8, b.h * H);
+    const bx = b.x * W, by = b.y * H;
+    // 让脸框填满目标椭圆（外接矩形）
+    const scale = Math.max((ATT.rx * 2) / bw, (ATT.ry * 2) / bh) * ATT.pad;
+    const dw = W * scale, dh = H * scale;
+    // 脸框中心对齐椭圆中心
+    const faceCx = (bx + bw / 2) * scale;
+    const faceCy = (by + bh / 2) * scale;
+    const x = ATT.cx - faceCx;
+    const y = ATT.cy - faceCy;
+    const el = document.getElementById('targetPhoto');
+    el.setAttribute('x', x.toFixed(2));
+    el.setAttribute('y', y.toFixed(2));
+    el.setAttribute('width', dw.toFixed(2));
+    el.setAttribute('height', dh.toFixed(2));
+    el.setAttribute('preserveAspectRatio', 'none');
+    el.setAttribute('href', dataUrl);
+    el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', dataUrl);
+    document.getElementById('photoSlot').style.display = '';
+    document.getElementById('faceUploadHint').style.display = 'none';
+  };
+  img.src = dataUrl;
+}
 /* ===================== 语音（大白的声音） ===================== */
 let voiceOn = true;
 let zhVoice = null;
@@ -1155,14 +1194,15 @@ $('#filePick').addEventListener('change', e => {
   const reader = new FileReader();
   reader.onload = () => {
     targetImg = reader.result;
-    detectFace(targetImg);
+    detectFace(targetImg).then(b => applyFaceTexture(targetImg, b));
     const img = $('#targetPhoto');
     img.setAttribute('href', targetImg);
     img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', targetImg);
     $('#faceUploadHint').style.display = 'none';   // 占位消失
     $('#photoSlot').style.display = '';            // 照片盖到脸上
-    tagEl.style.display = 'block';
-    tagEl.textContent = '正在打：' + (nameInput.value.trim() || '那个东西');
+    const tg = $('#targetTag');
+    tg.style.display = 'block';
+    tg.textContent = '正在打：' + (nameInput.value.trim() || '那个东西');
   };
   reader.readAsDataURL(f);
 });
