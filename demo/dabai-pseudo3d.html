@@ -249,6 +249,9 @@
     0%,100%{transform:scale(1,1)}
     50%{transform:scale(1.014,1.028)}
   }
+  .voicerow{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11.5px;color:#a08b7c}
+  .voicerow button{width:34px;height:28px;border:1px solid #e7d9cc;border-radius:9px;
+    background:#fdf7f1;font-size:14px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -362,6 +365,7 @@
       <button class="act" data-tool="glove"><span>🥊</span>拳套</button>
       <button class="act" data-tool="rock"><span>🪨</span>石头</button>
     </div>
+    <div class="voicerow"><button id="voiceBtn" onclick="toggleVoice()">🔊</button><span>大白的声音</span></div>
     <div class="chat">
       <input id="chatInput" maxlength="60" placeholder="跟大白说两句…（它会听）">
       <button id="chatSend">发送</button>
@@ -826,6 +830,7 @@ function say(text, koStyle){
   b.classList.toggle('ko', !!koStyle);
   b.classList.add('on');
   clearTimeout(bubbleTimer);
+  if(typeof speak === 'function') speak(text);
   if(!HOLD) bubbleTimer = setTimeout(()=>b.classList.remove('on'), 2400);
 }
 
@@ -982,11 +987,26 @@ function localLevel(text){
   return 1;
 }
 const CHAT_FALLBACK = {
-  1: ['我在听。','你慢慢说。','嗯，我知道了。'],
-  2: ['你一定很难受。','辛苦了。','我陪着你。'],
-  3: ['你真的很生气。','我感受到了。','没关系，发泄出来。'],
-  4: ['……','我还在听。','先停一下好不好。']
+  1: ['我在听。','你慢慢说。','嗯，我知道了。','这事儿确实烦。','换我我也会郁闷。',
+      '先坐下歇一会儿？','听起来今天不太顺。','不着急，你想说多久都行。',
+      '我在这儿呢。','你接着说。'],
+  2: ['你一定很难受。','辛苦了。','我陪着你。','这事儿搁谁身上都憋屈。','你已经撑了很久了。',
+      '别自己扛着。','我听着呢，不打断你。','难受就说出来，没事的。',
+      '要不要先深呼吸一下？','你不是一个人在扛。'],
+  3: ['你真的很生气。','我感受到了。','没关系，发泄出来。','气成这样，肯定憋很久了。',
+      '换我也受不了。','想打就打我，别憋着。','你的火我接着。','不用忍着，我知道你气。',
+      '我不会怪你。','气完了记得喝口水。'],
+  4: ['……','我还在听。','先停一下好不好。','我不躲，你说。','我知道你不是冲我。',
+      '骂出来会好受一点吗？','我在这儿，不走。','你气头上说的话，我不往心里去。',
+      '慢慢来。','……我在。']
 };
+let fbCursor = { 1:0, 2:0, 3:0, 4:0 };
+function fallbackLine(lv){
+  const arr = CHAT_FALLBACK[lv] || CHAT_FALLBACK[1];
+  const i = (fbCursor[lv] || 0) % arr.length;
+  fbCursor[lv] = i + 1;
+  return arr[i];
+}
 const STICKER_BY_LV = { 1:'我在听', 2:'委屈', 3:'吓到', 4:'安静' };
 
 const BODY_CLASSES = ['act-lean','act-shrink','act-recoil','act-low'];
@@ -1058,8 +1078,7 @@ async function sendChat(){
     }
   }catch(e){ /* 断网走兜底 */ }
   if(!reply){
-    const arr = CHAT_FALLBACK[level] || CHAT_FALLBACK[1];
-    reply = arr[Math.floor(Math.random()*arr.length)];
+    reply = fallbackLine(level);
   }
   // 融合规则：刚被打过 → 先让击打反馈演完，0.5 秒后再叠文字表情
   const delay = (Date.now() - lastHitAt < 400) ? 500 : 0;
@@ -1072,6 +1091,43 @@ async function sendChat(){
 }
 $('#chatSend').addEventListener('click', sendChat);
 $('#chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') sendChat(); });
+
+/* ===================== 语音（大白的声音） ===================== */
+let voiceOn = true;
+let zhVoice = null;
+function pickVoice(){
+  try{
+    const vs = window.speechSynthesis.getVoices() || [];
+    zhVoice = vs.find(v => /zh[-_]CN/i.test(v.lang) && /female|Xiaoxiao|Huihui|Yaoyao/i.test(v.name))
+           || vs.find(v => /zh/i.test(v.lang)) || null;
+  }catch(e){}
+}
+if('speechSynthesis' in window){
+  pickVoice();
+  window.speechSynthesis.onvoiceschanged = pickVoice;
+}
+/* 伤害越高：语速越慢、音量越低、音调越低（软糯 → 虚弱） */
+function speak(text){
+  if(!voiceOn || !('speechSynthesis' in window)) return;
+  const t2 = (text || '').replace(/[…\.]{2,}/g, '，').trim();
+  if(!t2 || t2 === '…') return;
+  try{
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t2);
+    const ratio = Math.min(1, total / MAX);          // 0 → 1
+    u.rate = 1.02 - 0.34 * ratio;                    // 1.02 → 0.68
+    u.volume = 0.95 - 0.42 * ratio;                  // 0.95 → 0.53
+    u.pitch = 1.28 - 0.42 * ratio;                   // 1.28 → 0.86
+    if(zhVoice) u.voice = zhVoice;
+    window.speechSynthesis.speak(u);
+  }catch(e){}
+}
+function toggleVoice(){
+  voiceOn = !voiceOn;
+  if(!voiceOn){ try{ window.speechSynthesis.cancel(); }catch(e){} }
+  const b = document.getElementById('voiceBtn');
+  if(b) b.textContent = voiceOn ? '🔊' : '🔇';
+}
 /* ===== 工具切换 ===== */
 document.querySelectorAll('.act').forEach(b=>{
   b.onclick = ()=>{

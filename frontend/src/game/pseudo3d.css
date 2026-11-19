@@ -1,0 +1,246 @@
+/* 伪 3D 大白 · 样式（从单文件 demo 移植） */
+
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{
+    font-family:"Microsoft YaHei",system-ui,sans-serif;
+    background:#1a1614;min-height:100vh;display:flex;align-items:center;justify-content:center;
+    padding:10px;color:#3d2f27;overflow:hidden;
+  }
+  .app{width:100%;max-width:430px}
+
+  /* ===== 房间 ===== */
+  .stage{
+    position:relative;height:470px;border-radius:22px;overflow:hidden;
+    perspective:900px;perspective-origin:50% 40%;
+    background:radial-gradient(ellipse 80% 70% at 50% 18%,#fff 0%,#f4ece3 55%,#e5d8c8 100%);
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  .wall{position:absolute;inset:0 0 36% 0;
+    background:radial-gradient(ellipse 70% 60% at 50% 25%,#ffffff,#efe6dc 70%,#e3d7c9);
+    box-shadow:inset 0 -30px 50px -35px rgba(150,120,95,.4)}
+  .board{position:absolute;left:9%;top:12%;width:26%;height:40%;border-radius:9px;
+    background:linear-gradient(150deg,#e9d5b9,#dcc0a0);opacity:.7;
+    box-shadow:0 4px 12px rgba(140,105,75,.25),inset 0 0 0 3px rgba(255,255,255,.5)}
+  .floor{position:absolute;inset:64% 0 0 0;transform:rotateX(50deg);transform-origin:top center;
+    background:linear-gradient(180deg,#efe6db,#e2d5c6 55%,#d7c7b5);
+    box-shadow:inset 0 24px 36px -24px rgba(120,95,70,.4)}
+  .floor::after{content:"";position:absolute;inset:0;opacity:.45;
+    background-image:linear-gradient(rgba(255,255,255,.6) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.6) 1px,transparent 1px);
+    background-size:44px 44px}
+  .glow{position:absolute;inset:0;pointer-events:none;
+    background:radial-gradient(circle at 50% 12%,rgba(255,255,255,.95),transparent 58%)}
+
+  /* ===== 大白容器（3D 倾斜）===== */
+  .dabai{position:absolute;left:50%;bottom:58px;width:300px;height:400px;
+    margin-left:-150px;transform-style:preserve-3d;
+    transform:rotateX(4deg) rotateY(-7deg);
+    transition:transform .5s cubic-bezier(.2,.8,.2,1),filter .4s;cursor:crosshair}
+  .dabai.ko{transform:rotateX(14deg) rotateY(-14deg) rotate(-9deg) translateY(54px) scaleY(.5) scaleX(1.1);
+    filter:saturate(.5) brightness(.95);cursor:not-allowed}
+  .dabai.shake{animation:sh .34s cubic-bezier(.36,.07,.19,.97)}
+  @keyframes sh{
+    0%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}
+    25%{transform:rotateX(4deg) rotateY(-7deg) translate(-8px,3px) rotate(-1.6deg)}
+    55%{transform:rotateX(4deg) rotateY(-7deg) translate(7px,-3px) rotate(1.2deg)}
+    100%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}}
+  .dabai.inflate{animation:inf 2s cubic-bezier(.34,1.4,.64,1)}
+  @keyframes inf{
+    0%{transform:rotateX(14deg) rotateY(-14deg) rotate(-9deg) translateY(54px) scaleY(.5) scaleX(1.1)}
+    45%{transform:rotateX(2deg) rotateY(-4deg) translateY(-6px) scaleY(1.12) scaleX(.94)}
+    75%{transform:rotateX(4deg) rotateY(-7deg) scaleY(.96) scaleX(1.02)}
+    100%{transform:rotateX(4deg) rotateY(-7deg)}}
+
+  svg{display:block;width:100%;height:100%;overflow:visible}
+  .part{cursor:crosshair}
+  .part:hover{filter:brightness(1.04)}
+
+  /* 影 */
+  .shadow{position:absolute;left:50%;bottom:44px;width:200px;height:32px;margin-left:-100px;
+    border-radius:50%;background:radial-gradient(ellipse,rgba(120,95,70,.34),transparent 72%);
+    transition:width .5s,opacity .5s;pointer-events:none}
+  .shadow.ko{width:250px;opacity:.55}
+
+  /* 凹痕 / 光圈 / 飘字 */
+  .dent{position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(90,60,45,.45),rgba(90,60,45,.18) 45%,transparent 72%);
+    animation:dent .62s cubic-bezier(.2,.9,.3,1.2) forwards}
+  @keyframes dent{
+    0%{transform:translate(-50%,-50%) scale(.3);opacity:0}
+    18%{transform:translate(-50%,-50%) scale(1.15);opacity:1}
+    50%{transform:translate(-50%,-50%) scale(.95);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+  .ring{position:absolute;border-radius:50%;border:3px solid rgba(255,255,255,.95);pointer-events:none;
+    animation:ring .5s ease-out forwards}
+  @keyframes ring{0%{transform:translate(-50%,-50%) scale(.2);opacity:.95}
+    100%{transform:translate(-50%,-50%) scale(2.1);opacity:0}}
+  /* ===== 武器实体 ===== */
+  .wpn{position:absolute;pointer-events:none;z-index:5;will-change:transform}
+  .wpn-fist{width:44px;height:40px;border-radius:14px 16px 18px 16px;
+    background:radial-gradient(circle at 34% 28%,#fff,#f0e4d6 60%,#d9c6b2);
+    box-shadow:0 6px 16px rgba(120,90,65,.35),inset -4px -6px 10px rgba(160,130,105,.35)}
+  .wpn-glove{width:56px;height:52px;border-radius:18px;
+    background:radial-gradient(circle at 32% 26%,#ff7a5c,#e8341f 62%,#b8180a);
+    box-shadow:0 8px 20px rgba(180,40,25,.45),inset -5px -7px 12px rgba(120,10,0,.45)}
+  .wpn-glove::after{content:"";position:absolute;left:6px;top:-8px;width:44px;height:14px;border-radius:8px;
+    background:linear-gradient(180deg,#ff6b4d,#c22110);box-shadow:0 2px 6px rgba(0,0,0,.2)}
+  .wpn-rock{width:46px;height:42px;
+    background:linear-gradient(150deg,#b9b2a8,#8d857a 55%,#6b645b);
+    border-radius:52% 48% 44% 56%/48% 54% 46% 52%;
+    box-shadow:0 8px 18px rgba(0,0,0,.35),inset -4px -5px 10px rgba(50,45,40,.5),inset 4px 4px 8px rgba(255,255,255,.35)}
+  /* 飞入动画 */
+  .wpn-fist{animation:fistIn .26s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes fistIn{
+    0%{transform:translate(calc(-50% - 130px),-50%) scale(.7);opacity:0}
+    40%{opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.06);opacity:1}
+  }
+  .wpn-glove{animation:gloveIn .42s cubic-bezier(.2,.9,.3,1) forwards}
+  @keyframes gloveIn{
+    0%{transform:translate(calc(-50% + 160px),calc(-50% + 30px)) scale(.6) rotate(18deg);opacity:0}
+    35%{transform:translate(calc(-50% + 90px),calc(-50% + 10px)) scale(.85) rotate(8deg);opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.12) rotate(0);opacity:1}
+  }
+  .wpn-rock{animation:rockIn .5s cubic-bezier(.4,.1,.7,1) forwards}
+  @keyframes rockIn{
+    0%{transform:translate(calc(-50% - 150px),calc(-50% - 170px)) scale(.5) rotate(-200deg);opacity:0}
+    25%{opacity:1}
+    100%{transform:translate(-50%,-50%) scale(1.05) rotate(60deg);opacity:1}
+  }
+  .wpn.out{animation:wpnOut .3s ease-out forwards}
+  @keyframes wpnOut{100%{opacity:0;transform:translate(-50%,-50%) scale(.7)}}
+  /* 石头落地尘土 */
+  .dust{position:absolute;border-radius:50%;pointer-events:none;
+    background:radial-gradient(circle,rgba(160,140,120,.55),transparent 70%);
+    animation:dust .6s ease-out forwards}
+  @keyframes dust{0%{transform:translate(-50%,-50%) scale(.4);opacity:.9}
+    100%{transform:translate(-50%,-50%) scale(2.4);opacity:0}}
+  .stk{position:absolute;padding:5px 11px;font-size:12px;font-weight:700;border-radius:12px 12px 12px 3px;
+    background:#fff;color:#8a6a4f;box-shadow:0 5px 14px rgba(150,115,90,.3);pointer-events:none;
+    animation:si .3s cubic-bezier(.2,.9,.3,1.3),so .4s 2.4s forwards}
+  @keyframes si{0%{transform:translateY(8px) scale(.7);opacity:0}100%{transform:translateY(0) scale(1);opacity:1}}
+  @keyframes so{100%{opacity:0;transform:translateY(-8px)}}
+
+  /* ===== 底部 UI ===== */
+  .hud{margin-top:10px;background:#fff;border-radius:16px;padding:12px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.4)}
+  .row1{display:flex;justify-content:space-between;font-size:12px;color:#a08b7c;margin-bottom:6px}
+  .row1 b{color:#3d2f27;font-size:15px}
+  .bar{height:12px;border-radius:99px;background:#f0e2d6;overflow:hidden}
+  .bar i{display:block;height:100%;border-radius:99px;
+    background:linear-gradient(90deg,#ffb27a,#ff6a3d);transition:width .3s}
+  .bar.ko i{background:linear-gradient(90deg,#c9d6e2,#a8b8c8)}
+  .tip{height:18px;font-size:12px;font-weight:800;color:#ff6a3d;text-align:center;margin-top:5px}
+  .acts{display:flex;gap:8px;margin-top:10px}
+  .act{flex:1;height:62px;border:0;border-radius:15px;background:#fff;color:#6b5748;
+    font-family:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:2px;cursor:pointer;box-shadow:0 5px 14px rgba(0,0,0,.35);transition:.12s}
+  .act span{font-size:20px;line-height:1}
+  .act small{font-size:10px;opacity:.6}
+  .act.on{background:linear-gradient(160deg,#ff9a62,#ff6a3d);color:#fff}
+  .act:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ===== 上传遮罩 ===== */
+  .uploader{
+    position:absolute;inset:0;z-index:20;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:14px;
+    background:rgba(28,22,19,.82);backdrop-filter:blur(6px);border-radius:22px;
+    transition:opacity .4s;
+  }
+  .uploader.hide{opacity:0;pointer-events:none}
+  .uploader h2{color:#fff;font-size:17px;font-weight:800;letter-spacing:1px}
+  .uploader p{color:#c9b8a8;font-size:12px;text-align:center;line-height:1.8}
+  .upbox{width:104px;height:104px;border-radius:18px;border:2px dashed #b99a80;
+    display:flex;align-items:center;justify-content:center;font-size:30px;color:#b99a80;
+    cursor:pointer;overflow:hidden;background:rgba(255,255,255,.06)}
+  .upbox img{width:100%;height:100%;object-fit:cover}
+  .upname{width:190px;height:38px;border-radius:10px;border:1px solid #5a4a3d;
+    background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:13px;
+    text-align:center;outline:none}
+  .upname::placeholder{color:#8a7666}
+  .upbtn{width:150px;height:40px;border:0;border-radius:11px;font-family:inherit;
+    font-size:14px;font-weight:800;color:#fff;cursor:pointer;
+    background:linear-gradient(160deg,#ff9a62,#ff6a3d);box-shadow:0 8px 20px rgba(255,106,61,.4)}
+  .upbtn:disabled{opacity:.45;cursor:not-allowed}
+  /* 墙上的目标照片 */
+  .board{overflow:hidden}
+  .board img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}
+  /* 目标名字标签 */
+  .target-tag{position:absolute;top:14px;left:50%;transform:translateX(-50%);
+    padding:5px 14px;border-radius:99px;background:rgba(255,255,255,.86);
+    font-size:12px;font-weight:800;color:#8a3d1c;letter-spacing:1px;
+    box-shadow:0 4px 14px rgba(150,110,80,.3);max-width:70%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap}
+  .namerow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .namerow span{font-size:12px;color:#a08b7c;white-space:nowrap}
+  .namerow input{flex:1;height:32px;border:1px solid #e7d9cc;border-radius:9px;
+    background:#fdf7f1;color:#5a4a3d;font-family:inherit;font-size:13px;padding:0 10px;outline:none}
+  .namerow input::placeholder{color:#c0ad9c}
+  /* 照片被挤压 */
+  #photoSlot.squash{animation:photoSquash .62s cubic-bezier(.2,.9,.3,1.25)}
+  @keyframes photoSquash{
+    0%{transform:scale(1,1) skewX(0deg)}
+    16%{transform:scale(1.16,.8) skewX(-7deg) translateY(4px)}
+    38%{transform:scale(.94,1.08) skewX(4deg) translateY(-2px)}
+    60%{transform:scale(1.06,.94) skewX(-2deg)}
+    82%{transform:scale(.98,1.02) skewX(1deg)}
+    100%{transform:scale(1,1) skewX(0deg)}
+  }
+  #photoSlot{transform-box:fill-box;transform-origin:center}
+  /* 眼泪流下 */
+  @keyframes tearRun{
+    0%{opacity:0;stroke-dasharray:0 60}
+    25%{opacity:1;stroke-dasharray:18 60}
+    100%{opacity:0;stroke-dasharray:44 60;transform:translateY(78px)}
+  }
+  /* ===== 台词气泡 ===== */
+  .bubble{
+    position:absolute;left:50%;top:8px;transform:translate(-50%,-6px) scale(.92);
+    max-width:78%;padding:8px 13px;border-radius:14px 14px 14px 4px;
+    background:rgba(255,255,255,.96);color:#5a4a3d;font-size:13px;line-height:1.6;
+    box-shadow:0 8px 22px rgba(150,115,90,.3);opacity:0;pointer-events:none;
+    transition:opacity .25s, transform .25s;z-index:12;text-align:center;
+  }
+  .bubble.on{opacity:1;transform:translate(-50%,0) scale(1)}
+  .bubble.ko{background:rgba(230,225,235,.97);color:#6b5f77}
+  #headG.headShake{animation:headShake .42s ease-in-out}
+  @keyframes headShake{
+    0%,100%{translate:0 0}
+    25%{translate:-4px 0}
+    50%{translate:4px 0}
+    75%{translate:-2px 0}
+  }
+  #headG{transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+  /* ===== 聊天 ===== */
+  .chat{display:flex;gap:8px;margin-top:10px}
+  .chat input{flex:1;height:40px;border:1px solid #e7d9cc;border-radius:11px;
+    background:#fdf7f1;color:#5a4a3d;font-family:inherit;font-size:13px;padding:0 12px;outline:none}
+  .chat input::placeholder{color:#c0ad9c}
+  .chat button{width:60px;height:40px;border:0;border-radius:11px;background:#ff7a45;color:#fff;
+    font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .chat button:disabled{opacity:.5}
+  /* ===== 身体微动作 ===== */
+  #svg{
+    transition:transform .55s cubic-bezier(.2,.8,.2,1);
+    transform-box:fill-box; transform-origin:50% 82%;
+  }
+  #handG{transition:transform .5s cubic-bezier(.2,.8,.2,1); transform-box:fill-box; transform-origin:50% 50%}
+  #headG{transform-box:fill-box; transform-origin:50% 90%}
+
+  /* 倾听：往前靠近一点 */
+  .act-lean #svg{transform:scale(1.045) translateY(-3px)}
+  /* 委屈：缩起来 + 手臂贴身 */
+  .act-shrink #svg{transform:scale(.93) translateY(11px)}
+  .act-shrink #handG{transform:scale(.82) translateY(6px)}
+  /* 被震到：后仰 + 手臂张开 */
+  .act-recoil #svg{transform:scale(.97) translateY(-9px) rotate(-2.2deg)}
+  .act-recoil #handG{transform:scale(1.08) rotate(-4deg)}
+  /* 低电量：缩得更低 + 手臂垂下 */
+  .act-low #svg{transform:scale(.9) translateY(16px) rotate(-1deg)}
+  .act-low #handG{transform:scale(.78) translateY(12px)}
+  /* 呼吸（一直有，KO 时停） */
+  .act-breathe #svg{animation:breathe 4.4s ease-in-out infinite}
+  @keyframes breathe{
+    0%,100%{transform:scale(1,1)}
+    50%{transform:scale(1.014,1.028)}
+  }
