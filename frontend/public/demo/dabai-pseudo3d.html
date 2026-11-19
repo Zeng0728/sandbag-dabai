@@ -378,7 +378,7 @@
       <span>我在打：</span>
       <input id="nameInput" maxlength="12" placeholder="给它起个名字">
     </div>
-    <div class="row1"><span>它的火气</span><b id="hpWord">还满着</b></div>
+    <div class="row1"><span>卸下的</span><b id="hpWord">还满着</b></div>
     <div class="bar" id="bar"><i id="barFill" style="width:0%"></i></div>
     <div class="tip" id="tip"></div>
     <div class="acts">
@@ -728,14 +728,14 @@ function updateHUD(){
   $('#barFill').style.width = (total/MAX*100)+'%';
   const w = $('#hpWord');
   if(w){
-    w.textContent = ko ? '已经泄气' :
-      total === 0 ? '还满着' :
-      total < 13 ? '有点晃' :
-      total < 26 ? '憋着' :
-      total < 40 ? '快撑不住' : '泄光了';
+    w.textContent = ko ? '全卸下了' :
+      total === 0 ? '还没开始' :
+      total < 13 ? '卸了一点' :
+      total < 26 ? '卸掉一半' :
+      total < 40 ? '快卸完了' : '全卸下了';
   }
   const t = $('#tip');
-  if(ko){ t.textContent = '💨 已经泄气了…'; return; }
+  if(ko){ t.textContent = '💨 卸光了，正在缓缓充气…'; return; }
   if(total === 0) t.textContent = '';
   else if(total < 13) t.textContent = '它有点疼…';
   else if(total < 26) t.textContent = '它委屈了';
@@ -752,7 +752,7 @@ function knockout(){
   document.querySelectorAll('.act').forEach(b=>b.disabled=true);
   beep('leak');
   say((koCount >= 2 ? KO_LINE_2 : KO_LINE)[Math.floor(Math.random()*3)], true);
-  $('#tip').textContent = koCount === 1 ? '💨 泄气了… 12 秒后充气' : '💨 又泄气了… 它有点委屈';
+  $('#tip').textContent = koCount === 1 ? '💨 卸光了… 12 秒后重新充气' : '💨 又卸光了一次… 它有点累';
   $('#mouth') && $('#mouth').setAttribute('fill','#2f2b28');
 
   let left = 12;
@@ -1183,7 +1183,7 @@ async function sendChat(){
   // 融合规则：刚被打过 → 先让击打反馈演完，0.5 秒后再叠文字表情
   const delay = (Date.now() - lastHitAt < 400) ? 500 : 0;
   setTimeout(()=>{ applyEmotion(level); say(reply, ko); }, delay);
-  // 文字也让火气涨一点（联动）
+  // 文字倾诉也让「卸下」进度前进一点（联动）
   total = Math.min(MAX, total + (level >= 3 ? 2 : 1));
   updateHUD();
   resetIdle();
