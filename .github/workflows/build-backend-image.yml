@@ -21,7 +21,9 @@ jobs:
       - name: Build and push to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          IMAGE=ghcr.io/${{ github.repository_owner }}/sandbag-dabai-backend
+          # 镜像名必须全小写，GitHub 用户名可能是大写
+          OWNER=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
+          IMAGE=ghcr.io/$OWNER/sandbag-dabai-backend
           docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} ./backend
           docker push $IMAGE:latest
           docker push $IMAGE:${{ github.sha }}
