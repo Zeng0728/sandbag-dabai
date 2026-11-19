@@ -297,7 +297,7 @@
             <feGaussianBlur stdDeviation="7"/>
           </filter>
           <mask id="faceMask" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="400">
-            <ellipse cx="150" cy="132" rx="63" ry="61" fill="url(#faceFade)"/>
+            <ellipse cx="150" cy="132" rx="90" ry="86" fill="url(#faceFade)"/>
           </mask>
           <radialGradient id="photoShade" cx="34%" cy="26%" r="82%">
             <stop offset="0%" stop-color="rgba(255,255,255,.5)"/>
@@ -1117,6 +1117,8 @@ function setSelfFaceVisible(v){
     var el = document.getElementById(id);
     if(el) el.style.display = v ? '' : 'none';
   });
+  var head = document.getElementById('headG');
+  if(head) head.style.display = v ? '' : 'none';
 }
 
 /* ===== 右下角：换照片 / 去掉照片 ===== */
@@ -1146,7 +1148,7 @@ $('#chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') sendCha
 /* ===== 自动人脸抠图：把检测到的脸框铺到目标椭圆上 ===== */
 /* nbox: 归一化脸框 {x,y,w,h}（0~1） */
 function applyFaceTexture(dataUrl, nbox){
-  const ATT = { cx:150, cy:132, rx:63, ry:61, pad:1.12 };
+  const ATT = { cx:150, cy:132, rx:90, ry:86, pad:1.04 };
   const img = new Image();
   img.onload = () => {
     const W = img.naturalWidth || 1, H = img.naturalHeight || 1;
