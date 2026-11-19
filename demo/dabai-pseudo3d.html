@@ -602,9 +602,9 @@ function spawnFaceTears(n){
   for(let i = 0; i < count; i++){
     const side = i % 2 === 0 ? -1 : 1;
     const cx = (fb.x + fb.w / 2) + side * (fb.w * 0.26 + Math.random() * 6);
-    const cy = fb.y + fb.h * 0.42;
+    const cy = fb.y + fb.h * 0.30;
     const path = document.createElementNS('http://www.w3.org/2000/svg','path');
-    const len = 26 + Math.random() * 18;
+    const len = 34 + Math.random() * 20;
     path.setAttribute('d', `M${cx} ${cy} q${side*3} ${len*0.5} ${side*1.5} ${len}`);
     path.setAttribute('stroke', 'rgba(140,205,245,.92)');
     path.setAttribute('stroke-width', '4.5');
@@ -1110,6 +1110,15 @@ async function sendChat(){
   resetIdle();
   btn.disabled = false;
 }
+
+/* 照片贴上后，隐藏大白自己的眼睛和嘴，让照片本身成为脸 */
+function setSelfFaceVisible(v){
+  ['eyeL','eyeR','mouth'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = v ? '' : 'none';
+  });
+}
+
 /* ===== 右下角：换照片 / 去掉照片 ===== */
 (function(){
   var bp = document.getElementById('btnPhoto');
@@ -1124,6 +1133,7 @@ async function sendChat(){
     if(slot) slot.style.display = 'none';
     if(tears) tears.innerHTML = '';
     if(ph) ph.removeAttribute('href');
+    if(typeof setSelfFaceVisible === 'function') setSelfFaceVisible(true);
     if(tg) tg.style.display = 'none';
     if(fp) fp.value = '';
     bc.style.display = 'none';
@@ -1161,6 +1171,7 @@ function applyFaceTexture(dataUrl, nbox){
     el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', dataUrl);
     document.getElementById('photoSlot').style.display = '';
     document.getElementById('faceUploadHint').style.display = 'none';
+    if(typeof setSelfFaceVisible === 'function') setSelfFaceVisible(false);
   };
   img.src = dataUrl;
 }
@@ -1259,11 +1270,8 @@ if(q.get('skip') === '1'){
   const tag = $('#targetTag');
   tag.textContent = '正在打：' + (q.get('name') || '那台破空调');
   tag.style.display = 'block';
-  $('#photoSlot').style.display = '';
-  const ph = $('#targetPhoto');
-  const fake = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="112" height="120"><rect width="112" height="120" fill="#9c8b7c"/><circle cx="56" cy="46" r="20" fill="#6f6156"/><rect x="26" y="72" width="60" height="42" rx="18" fill="#6f6156"/></svg>');
-  ph.setAttribute('href', fake);
-  ph.setAttributeNS('http://www.w3.org/1999/xlink','xlink:href', fake);
+  const fake = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="360"><rect width="300" height="360" fill="#a89886"/><circle cx="150" cy="140" r="72" fill="#6f6156"/><ellipse cx="122" cy="122" rx="13" ry="17" fill="#2f2b28"/><ellipse cx="178" cy="122" rx="13" ry="17" fill="#2f2b28"/><path d="M112 196 q38 26 76 0" stroke="#2f2b28" stroke-width="8" fill="none" stroke-linecap="round"/></svg>');
+  applyFaceTexture(fake, { x: 0.18, y: 0.10, w: 0.64, h: 0.70 });
 }
 if(q.get('auto')){
   // ?auto=head3,face3,belly3,foot2  便于截图/验收
