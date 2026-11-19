@@ -65,6 +65,27 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
+# ---------------------------------------------------------------- 文字情绪分级（L1~L4）
+import re as _re
+
+_EMO_RULES = [
+    (4, _re.compile(r"(傻[逼比]|去死|滚开?|废物|垃圾|白痴|妈的|艹|操你|狗东西|贱)")),
+    (3, _re.compile(r"(气死|烦死|受不了|想打|打死|崩了|炸了|恨死|疯了|气炸)")),
+    (2, _re.compile(r"(委屈|难受|憋屈|撑不住|累死|好累|心累|想哭|哭了|压抑)")),
+    (1, _re.compile(r"(烦|郁闷|倒霉|不爽|唉|难过|emo|不开心)")),
+]
+
+
+def emotion_level(text: str) -> int:
+    """把用户文字粗分为 1~4 级（快、零成本；大模型兜底可后续加）。"""
+    t = (text or "").strip()
+    if not t:
+        return 1
+    for lv, pat in _EMO_RULES:
+        if pat.search(t):
+            return lv
+    return 1
+
 # ---------------------------------------------------------------- 留痕
 def _now() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -201,10 +222,10 @@ def chat(payload: dict):
     s["history"].append({"role": "user", "text": text, "ts": _now()})
     s["history"].append({"role": "assistant", "text": reply, "ts": _now()})
     log_event("chat", {
-        "session": s["id"], "persona": persona, "target": target_name,
+        "session": s["id"], "persona": persona, "target": target_name, "level": emotion_level(text),
         "text": text, "reply": reply, "mood": mood, "hp": s["hp"], "ms": elapsed,
     })
-    return {"reply": reply, "mood": mood, "ms": elapsed, "hp": s["hp"]}
+    return {"reply": reply, "mood": mood, "ms": elapsed, "hp": s["hp"], "level": emotion_level(text)}
 
 
 @app.post("/api/hit")
@@ -249,6 +270,11 @@ def state(session_id: str):
 
 # ---------------------------------------------------------------- 静态资源
 app.mount("/storage", StaticFiles(directory=str(BASE / "storage")), name="storage")
+
+# 静态演示版（单文件伪 3D demo），和 API 同源，方便手机直接玩
+DEMO_DIR = BASE.parent / "demo"
+if DEMO_DIR.exists():
+    app.mount("/demo", StaticFiles(directory=str(DEMO_DIR), html=True), name="demo")
 
 FRONTEND_DIST = BASE.parent / "frontend" / "dist"
 if FRONTEND_DIST.exists():

@@ -181,6 +181,74 @@
   .namerow input{flex:1;height:32px;border:1px solid #e7d9cc;border-radius:9px;
     background:#fdf7f1;color:#5a4a3d;font-family:inherit;font-size:13px;padding:0 10px;outline:none}
   .namerow input::placeholder{color:#c0ad9c}
+  /* 照片被挤压 */
+  #photoSlot.squash{animation:photoSquash .62s cubic-bezier(.2,.9,.3,1.25)}
+  @keyframes photoSquash{
+    0%{transform:scale(1,1) skewX(0deg)}
+    16%{transform:scale(1.16,.8) skewX(-7deg) translateY(4px)}
+    38%{transform:scale(.94,1.08) skewX(4deg) translateY(-2px)}
+    60%{transform:scale(1.06,.94) skewX(-2deg)}
+    82%{transform:scale(.98,1.02) skewX(1deg)}
+    100%{transform:scale(1,1) skewX(0deg)}
+  }
+  #photoSlot{transform-box:fill-box;transform-origin:center}
+  /* 眼泪流下 */
+  @keyframes tearRun{
+    0%{opacity:0;stroke-dasharray:0 60}
+    25%{opacity:1;stroke-dasharray:18 60}
+    100%{opacity:0;stroke-dasharray:44 60;transform:translateY(78px)}
+  }
+  /* ===== 台词气泡 ===== */
+  .bubble{
+    position:absolute;left:50%;top:8px;transform:translate(-50%,-6px) scale(.92);
+    max-width:78%;padding:8px 13px;border-radius:14px 14px 14px 4px;
+    background:rgba(255,255,255,.96);color:#5a4a3d;font-size:13px;line-height:1.6;
+    box-shadow:0 8px 22px rgba(150,115,90,.3);opacity:0;pointer-events:none;
+    transition:opacity .25s, transform .25s;z-index:12;text-align:center;
+  }
+  .bubble.on{opacity:1;transform:translate(-50%,0) scale(1)}
+  .bubble.ko{background:rgba(230,225,235,.97);color:#6b5f77}
+  #headG.headShake{animation:headShake .42s ease-in-out}
+  @keyframes headShake{
+    0%,100%{translate:0 0}
+    25%{translate:-4px 0}
+    50%{translate:4px 0}
+    75%{translate:-2px 0}
+  }
+  #headG{transition:transform .5s cubic-bezier(.2,.8,.2,1)}
+  /* ===== 聊天 ===== */
+  .chat{display:flex;gap:8px;margin-top:10px}
+  .chat input{flex:1;height:40px;border:1px solid #e7d9cc;border-radius:11px;
+    background:#fdf7f1;color:#5a4a3d;font-family:inherit;font-size:13px;padding:0 12px;outline:none}
+  .chat input::placeholder{color:#c0ad9c}
+  .chat button{width:60px;height:40px;border:0;border-radius:11px;background:#ff7a45;color:#fff;
+    font-family:inherit;font-size:13px;font-weight:800;cursor:pointer}
+  .chat button:disabled{opacity:.5}
+  /* ===== 身体微动作 ===== */
+  #svg{
+    transition:transform .55s cubic-bezier(.2,.8,.2,1);
+    transform-box:fill-box; transform-origin:50% 82%;
+  }
+  #handG{transition:transform .5s cubic-bezier(.2,.8,.2,1); transform-box:fill-box; transform-origin:50% 50%}
+  #headG{transform-box:fill-box; transform-origin:50% 90%}
+
+  /* 倾听：往前靠近一点 */
+  .act-lean #svg{transform:scale(1.045) translateY(-3px)}
+  /* 委屈：缩起来 + 手臂贴身 */
+  .act-shrink #svg{transform:scale(.93) translateY(11px)}
+  .act-shrink #handG{transform:scale(.82) translateY(6px)}
+  /* 被震到：后仰 + 手臂张开 */
+  .act-recoil #svg{transform:scale(.97) translateY(-9px) rotate(-2.2deg)}
+  .act-recoil #handG{transform:scale(1.08) rotate(-4deg)}
+  /* 低电量：缩得更低 + 手臂垂下 */
+  .act-low #svg{transform:scale(.9) translateY(16px) rotate(-1deg)}
+  .act-low #handG{transform:scale(.78) translateY(12px)}
+  /* 呼吸（一直有，KO 时停） */
+  .act-breathe #svg{animation:breathe 4.4s ease-in-out infinite}
+  @keyframes breathe{
+    0%,100%{transform:scale(1,1)}
+    50%{transform:scale(1.014,1.028)}
+  }
 </style>
 </head>
 <body>
@@ -256,16 +324,28 @@
             <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoShade)" style="pointer-events:none"/>
             <ellipse cx="150" cy="132" rx="64" ry="62" fill="url(#photoRim)" style="pointer-events:none"/>
           </g>
-          <rect x="112" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
-          <rect x="170" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
+          <rect id="eyeL" x="112" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
+          <rect id="eyeR" x="170" y="112" width="18" height="26" rx="9" fill="#2f2b28"/>
           <circle cx="117" cy="120" r="3.4" fill="#fff" opacity=".9"/>
           <circle cx="175" cy="120" r="3.4" fill="#fff" opacity=".9"/>
           <rect x="138" y="158" width="24" height="4" rx="2" fill="#2f2b28" opacity=".5" id="mouth"/>
+          <!-- 龇牙咧嘴（受击瞬间出现） -->
+          <g id="grimace" style="display:none;pointer-events:none">
+            <ellipse cx="150" cy="160" rx="27" ry="15" fill="#7a2f28"/>
+            <path d="M126 152 h48 v7 h-48 z" fill="#fff"/>
+            <path d="M126 168 h48 v5 h-48 z" fill="#fff"/>
+            <path d="M127 152 l6 0 l-6 8 z M143 152 l6 0 l-6 8 z M159 152 l6 0 l-6 8 z"
+                  fill="#e8ddd2"/>
+            <path d="M133 173 l5 0 l-5 -6 z M149 173 l5 0 l-5 -6 z M165 173 l5 0 l-5 -6 z"
+                  fill="#e8ddd2"/>
+          </g>
         </g>
+        <g id="faceTears" style="pointer-events:none"></g>
         <g id="decals"></g>
       </svg>
     </div>
     <div id="fx"></div>
+    <div class="bubble" id="bubble"></div>
     </div>
   
 
@@ -274,13 +354,17 @@
       <span>我在打：</span>
       <input id="nameInput" maxlength="12" placeholder="给它起个名字">
     </div>
-    <div class="row1"><span>伤害</span><b><span id="dmgNum">0</span> / 40</b></div>
+    <div class="row1"><span>它的火气</span><b id="hpWord">还满着</b></div>
     <div class="bar" id="bar"><i id="barFill" style="width:0%"></i></div>
     <div class="tip" id="tip"></div>
     <div class="acts">
-      <button class="act on" data-tool="fist"><span>✊</span>拳头<small>+1</small></button>
-      <button class="act" data-tool="glove"><span>🥊</span>拳套<small>+3</small></button>
-      <button class="act" data-tool="rock"><span>🪨</span>石头<small>+6</small></button>
+      <button class="act on" data-tool="fist"><span>✊</span>拳头</button>
+      <button class="act" data-tool="glove"><span>🥊</span>拳套</button>
+      <button class="act" data-tool="rock"><span>🪨</span>石头</button>
+    </div>
+    <div class="chat">
+      <input id="chatInput" maxlength="60" placeholder="跟大白说两句…（它会听）">
+      <button id="chatSend">发送</button>
     </div>
   </div>
 </div>
@@ -298,6 +382,7 @@ const LINES = {
 };
 
 let total = 0;
+let lastHitAt = 0;
 let partHits = { head:0, face:0, hand:0, belly:0, foot:0 };
 let tool = 'fist';
 let ko = false;
@@ -309,7 +394,8 @@ const dabai = $('#dabai'), fx = $('#fx'), svg = $('#svg'), decals = $('#decals')
 
 /* ===== 音效：WebAudio 合成 ===== */
 let ac = null;
-function beep(type){
+const PART_PITCH = { head: 1.28, face: 1.16, hand: 1.05, belly: 0.82, foot: 0.92 };
+function beep(type, part){
   try{
     if(!ac) ac = new (window.AudioContext||window.webkitAudioContext)();
     const t = ac.currentTime;
@@ -327,7 +413,8 @@ function beep(type){
       g.gain.exponentialRampToValueAtTime(.001,t+1.6);
       o.connect(g).connect(ac.destination); o.start(t); o.stop(t+1.7); return;
     }
-    const base = type==='rock' ? 90 : type==='glove' ? 140 : 190;
+    const pm = PART_PITCH[part] || 1;
+    const base = (type==='rock' ? 90 : type==='glove' ? 140 : 190) * pm;
     const o = ac.createOscillator(), g = ac.createGain();
     o.type='sine'; o.frequency.setValueAtTime(base,t); o.frequency.exponentialRampToValueAtTime(45,t+.16);
     g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(.26,t+.008);
@@ -362,9 +449,10 @@ function hit(part, x, y, sx, sy){
   const d = DMG[tool];
   total = Math.min(MAX, total + d);
   partHits[part] = (partHits[part]||0) + 1;
+  lastHitAt = Date.now();
 
   dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake');
-  beep(tool);
+  beep(tool, part);
   spawnWeapon(tool, x, y);
   spawnDent(x, y);
   spawnRing(x, y, tool);
@@ -373,6 +461,10 @@ function hit(part, x, y, sx, sy){
   if(partHits[part] === 1 || partHits[part] === 4) showSticker(part, LINES[part][Math.min(2, Math.floor(partHits[part]/3))] );
 
   updateHUD();
+  setMood(tier());
+  if(part === 'head') shakeHead();
+  say(pickLine(part, partHits[part]));
+  resetIdle();
   if(total >= MAX) knockout();
 }
 
@@ -414,9 +506,15 @@ function deformPart(part, sx, sy, n){
     }
   }
   if(part === 'face'){
-    if(n >= 2) spawnTears(jx, jy);
-    if(n >= 3) addSvg('path', { d: 'M132 172 q18 14 36 0', stroke: '#2f2b28',
-      'stroke-width': 3, fill: 'none', 'stroke-linecap': 'round', opacity: .75 });
+    faceGrimace();
+    spawnFaceTears(n);
+    // 照片跟着被挤压
+    const slot = $('#photoSlot');
+    if(slot && slot.style.display !== 'none'){
+      slot.classList.remove('squash'); void slot.getBoundingClientRect();
+      slot.classList.add('squash');
+      setTimeout(()=>slot.classList.remove('squash'), 620);
+    }
   }
   if(part === 'hand'){
     if(n >= 2) addSvg('rect', { x: jx - 22, y: jy - 30, width: 44, height: 12, rx: 4,
@@ -435,11 +533,76 @@ function deformPart(part, sx, sy, n){
     if(n >= 3) addSvg('ellipse', { cx: jx, cy: jy + 6, rx: 18, ry: 12, fill: 'rgba(120,78,168,.4)' });
   }
 }
+/* 人脸识别：优先浏览器 FaceDetector，不支持则用居中启发式 */
+let faceBox = null;   // SVG 坐标系里的脸框 {x,y,w,h}
+async function detectFace(dataUrl){
+  faceBox = null;
+  try{
+    if('FaceDetector' in window){
+      const img = new Image();
+      img.src = dataUrl;
+      await img.decode();
+      const det = new window.FaceDetector({ fastMode: true, maxDetectedFaces: 1 });
+      const faces = await det.detect(img);
+      if(faces && faces.length){
+        const b = faces[0].boundingBox;
+        // 照片在 SVG 里是 x=84 y=62 w=132 h=140，且 object-fit: slice
+        const scale = Math.max(132 / img.width, 140 / img.height);
+        const drawW = img.width * scale, drawH = img.height * scale;
+        const offX = 84 + (132 - drawW) / 2, offY = 62 + (140 - drawH) / 2;
+        faceBox = { x: offX + b.x * scale, y: offY + b.y * scale, w: b.width * scale, h: b.height * scale };
+        return;
+      }
+    }
+  }catch(e){ /* 忽略，走启发式 */ }
+  // 启发式：假设人脸在照片中上部，占 62%
+  faceBox = { x: 150 - 40, y: 132 - 42, w: 80, h: 84 };
+}
+
+/* 龇牙咧嘴：受击瞬间出现，0.7 秒后收起 */
+let grimTimer = null;
+const HOLD = new URLSearchParams(location.search).get("hold") === "1";
+function faceGrimace(){
+  // B 方案：不盖住真人的嘴，只靠照片扭曲 + 眼泪表达"龇牙咧嘴"
+  const g = $('#grimace');
+  if(g) g.style.display = 'none';
+}
+/* 眼泪：从眼睛位置往下流，越打越多 */
+function spawnFaceTears(n){
+  const layer = $('#faceTears');
+  if(!layer) return;
+  const fb = faceBox || { x: 110, y: 90, w: 80, h: 84 };
+  const count = Math.min(6, 2 + Math.floor(n / 2));
+  for(let i = 0; i < count; i++){
+    const side = i % 2 === 0 ? -1 : 1;
+    const cx = (fb.x + fb.w / 2) + side * (fb.w * 0.26 + Math.random() * 6);
+    const cy = fb.y + fb.h * 0.42;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    const len = 26 + Math.random() * 18;
+    path.setAttribute('d', `M${cx} ${cy} q${side*3} ${len*0.5} ${side*1.5} ${len}`);
+    path.setAttribute('stroke', 'rgba(140,205,245,.92)');
+    path.setAttribute('stroke-width', '4.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('fill', 'none');
+    path.style.filter = 'drop-shadow(0 2px 3px rgba(90,160,220,.5))';
+    if(HOLD){
+      path.setAttribute('stroke-width','6');
+      path.setAttribute('d', `M${cx} ${cy} q${side*2} ${len*0.6} ${side*1} ${len*1.6}`);
+      const drop = document.createElementNS('http://www.w3.org/2000/svg','ellipse');
+      drop.setAttribute('cx', cx + side); drop.setAttribute('cy', cy + len*1.8);
+      drop.setAttribute('rx', 4.5); drop.setAttribute('ry', 6.5);
+      drop.setAttribute('fill', 'rgba(150,208,246,.95)');
+      layer.appendChild(drop);
+    } else {
+      path.style.animation = `tearRun ${1.1 + Math.random()*0.5}s ease-out ${i*0.08}s forwards`;
+    }
+    layer.appendChild(path);
+    if(!HOLD) setTimeout(()=>path.remove(), 1900);
+  }
+}
 function addSvg(tag, attrs){
   const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-  for(const k in attrs) el.setAttribute(k, attrs[k]);
-  el.setAttribute("class", part + "-mark");
-  decals.appendChild(el);
+  for(const k in attrs) el.setAttribute(k, attrs[k]);  decals.appendChild(el);
   return el;
 }
 function spawnStars(x, y){
@@ -537,24 +700,33 @@ function addDecal(part, n, x, y){
 }
 
 function updateHUD(){
-  $('#dmgNum').textContent = total;
   $('#barFill').style.width = (total/MAX*100)+'%';
+  const w = $('#hpWord');
+  if(w){
+    w.textContent = ko ? '已经泄气' :
+      total === 0 ? '还满着' :
+      total < 13 ? '有点晃' :
+      total < 26 ? '憋着' :
+      total < 40 ? '快撑不住' : '泄光了';
+  }
   const t = $('#tip');
   if(ko){ t.textContent = '💨 已经泄气了…'; return; }
   if(total === 0) t.textContent = '';
-  else if(total < 13) t.textContent = 'Lv1 · 有点疼…';
-  else if(total < 26) t.textContent = 'Lv2 · 好委屈';
-  else if(total < 40) t.textContent = 'Lv3 · 快撑不住了';
+  else if(total < 13) t.textContent = '它有点疼…';
+  else if(total < 26) t.textContent = '它委屈了';
+  else if(total < 40) t.textContent = '它快撑不住了';
 }
 
 /* ===== KO / 复活 ===== */
 function knockout(){
   ko = true; koCount++;
   dabai.classList.add('ko');
+  dabai.classList.remove('act-breathe');
   $('#shadow').classList.add('ko');
   $('#bar').classList.add('ko');
   document.querySelectorAll('.act').forEach(b=>b.disabled=true);
   beep('leak');
+  say((koCount >= 2 ? KO_LINE_2 : KO_LINE)[Math.floor(Math.random()*3)], true);
   $('#tip').textContent = koCount === 1 ? '💨 泄气了… 12 秒后充气' : '💨 又泄气了… 它有点委屈';
   $('#mouth') && $('#mouth').setAttribute('fill','#2f2b28');
 
@@ -581,11 +753,325 @@ function revive(){
     dabai.classList.remove('inflate');
     document.querySelectorAll('.act').forEach(b=>b.disabled=false);
     updateHUD();
+    setMood(1);
+    dabai.classList.add('act-breathe');
+    say(REVIVE_LINE[Math.floor(Math.random()*REVIVE_LINE.length)]);
     $('#tip').textContent = '重新充好气了';
     setTimeout(()=>{ if(!ko) $('#tip').textContent=''; }, 2000);
   }, 1900);
 }
 
+
+/* ===================== 台词 + 微表情 ===================== */
+const PART_WORD = { head:'头', face:'脸', hand:'手', belly:'肚子', foot:'脚' };
+
+// 按伤害档位 × 部位
+const PAIN = {
+  1: {
+    head:  ['嗯…头有点晕。','你手劲不小。','轻一点，会响的。'],
+    face:  ['脸被你打歪了。','有点发麻…','我脸还在吗？'],
+    hand:  ['手被打掉了半截。','胳膊有点软。','别打手，我还要抱人呢。'],
+    belly: ['肚子咚的一下。','里面空空的。','有点疼，但没事。'],
+    foot:  ['脚好像麻了。','我站不太稳。','别打脚，我会摔。'],
+    _:     ['嗯。','有点疼。','我记住了。']
+  },
+  2: {
+    head:  ['头好晕…眼前在转。','起包了，你看见了吗？','再打头我真的会傻。'],
+    face:  ['脸肿了…','眼睛有点睁不开。','我快哭了。'],
+    hand:  ['手抬不起来了。','胳膊上全是印子。','我抱不住东西了。'],
+    belly: ['肚子瘪下去一块。','喘不上气…','肚子在漏气。'],
+    foot:  ['站不住了…','腿在抖。','我可能会倒。'],
+    _:     ['好疼…','你真的很生气。','我忍着。']
+  },
+  3: {
+    _: ['我有点撑不住了…','眼前发黑…','别、别打了…','我快漏气了…','声音都在抖…']
+  },
+  4: {
+    _: ['……','我、我倒了…','没事，你继续。','我还在听。']
+  }
+};
+const KO_LINE = [
+  '泄气了…不过我还想听你说。',
+  '我躺一会儿就好，你别走。',
+  '有点漏气…等我充好。'
+];
+const KO_LINE_2 = [
+  '又倒了…我有点没力气了。',
+  '这次泄得更快…对不起。',
+  '我是不是…很没用。',
+  '躺着也挺好，你别生气。'
+];
+const REVIVE_LINE = [
+  '充好了。我还在。',
+  '又站起来了，继续吧。',
+  '这次我会站得更稳。'
+];
+const IDLE_LINE = [
+  '你要是不想打了，可以跟我说说话。',
+  '我在这儿，不着急。',
+  '手酸了吗？歇一会儿。'
+];
+
+function tier(){
+  if(total >= MAX) return 4;
+  if(total >= 26) return 3;
+  if(total >= 13) return 2;
+  return 1;
+}
+let bubbleTimer = null;
+function say(text, koStyle){
+  const b = $('#bubble');
+  if(!b) return;
+  b.textContent = text;
+  b.classList.toggle('ko', !!koStyle);
+  b.classList.add('on');
+  clearTimeout(bubbleTimer);
+  if(!HOLD) bubbleTimer = setTimeout(()=>b.classList.remove('on'), 2400);
+}
+
+/* ===== 同一部位被打多次：逐级递进的台词（5 阶段 × 5 部位） ===== */
+const PART_STAGE = {
+  head: [
+    ['头上被敲了一下。'],
+    ['又打头…有点晕。','头这一下有点实。'],
+    ['别一直打头…我会傻的。','眼前开始打转了。'],
+    ['头好痛…','我感觉有星星在转。'],
+    ['头…我快想不了事了…','别打了，我真的晕。']
+  ],
+  face: [
+    ['脸被拍了一下。'],
+    ['脸有点热…','你还真打脸啊。'],
+    ['脸肿起来了…','眼睛快睁不开。'],
+    ['别打脸…我快哭了。','脸都歪了…'],
+    ['脸…我已经看不见了…']
+  ],
+  hand: [
+    ['手被打到了。'],
+    ['胳膊有点麻。','我手还在。'],
+    ['抬不起来了…','胳膊上全是印子。'],
+    ['别打手…我还要抱人呢。','手没知觉了…'],
+    ['手…动不了了…']
+  ],
+  belly: [
+    ['肚子咚的一声。'],
+    ['肚子有点闷。','里面空空的。'],
+    ['肚子瘪下去一块…','喘不太上气。'],
+    ['别打肚子…我在漏气。','一按就凹进去。'],
+    ['肚子…瘪了…我快没气了。']
+  ],
+  foot: [
+    ['脚被踩了一下。'],
+    ['脚有点麻…','站不太稳。'],
+    ['腿在抖…','我快站不住了。'],
+    ['别打脚…我会摔的。','膝盖在发软。'],
+    ['脚…我没法站了…']
+  ],
+  _: [
+    ['嗯。'],
+    ['有点疼。'],
+    ['我忍着。'],
+    ['快撑不住了…'],
+    ['……']
+  ]
+};
+// 连续快速打同一个地方
+const SPAM_LINE = [
+  '别一直打一个地方…','换个地方好不好。','这里已经很痛了。'
+];
+let lastPartHit = { part: null, at: 0, streak: 0 };
+const _lastLine = {};
+function _pick(arr){
+  let line = arr[Math.floor(Math.random() * arr.length)];
+  let guard = 0;
+  while(line === _lastLine.last && guard++ < 6){
+    line = arr[Math.floor(Math.random() * arr.length)];
+  }
+  _lastLine.last = line;
+  return line;
+}
+function pickLine(part, nIn){
+  try{
+    // 连打同一个地方 → 抗议
+    const now = Date.now();
+    if(lastPartHit.part === part && now - lastPartHit.at < 1600){
+      lastPartHit.streak = (lastPartHit.streak || 0) + 1;
+    } else {
+      lastPartHit.streak = 1;
+    }
+    lastPartHit.part = part;
+    lastPartHit.at = now;
+    if(lastPartHit.streak >= 4 && Math.random() < 0.5){
+      return _pick(SPAM_LINE);
+    }
+    const n = nIn || partHits[part] || 1;
+    const table = PART_STAGE[part] || PART_STAGE._;
+    let arr = table[Math.min(table.length - 1, n - 1)];
+    if(typeof arr === 'string') arr = [arr];
+    if(!arr || !arr.length) arr = ['……'];
+    return _pick(arr);
+  }catch(e){
+    return '……';
+  }
+}
+/* 微表情：眼睛 5 态 + 头歪/低/抖 */
+function setMood(lv){
+  const eyeL = $('#eyeL'), eyeR = $('#eyeR'), head = $('#headG'), mouth = $('#mouth');
+  if(!eyeL || !eyeR) return;
+  const states = {
+    1: { h: 26, y: 112, w: 18, head: 'rotate(2deg)', op: 1 },
+    2: { h: 16, y: 117, w: 17, head: 'rotate(-3deg)', op: 1 },
+    3: { h: 9,  y: 121, w: 19, head: 'rotate(0deg)',  op: 1 },
+    4: { h: 6,  y: 124, w: 17, head: 'rotate(-6deg)', op: .55 }
+  };
+  const s = states[lv] || states[1];
+  [eyeL, eyeR].forEach(e => {
+    e.setAttribute('height', s.h);
+    e.setAttribute('y', s.y);
+    e.setAttribute('width', s.w);
+    e.setAttribute('opacity', s.op);
+  });
+  if(head) head.style.transform = s.head;
+  if(mouth){
+    mouth.setAttribute('width', lv >= 3 ? 16 : 24);
+    mouth.setAttribute('opacity', lv >= 3 ? .8 : .5);
+  }
+}
+function shakeHead(){
+  const head = $('#headG');
+  if(!head) return;
+  head.classList.remove('headShake'); void head.getBoundingClientRect();
+  head.classList.add('headShake');
+  setTimeout(()=>head.classList.remove('headShake'), 420);
+}
+
+/* 闲置：20 秒没动作就主动说话 */
+let idleTimer = null;
+function resetIdle(){
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(()=>{
+    if(ko) return;
+    say(IDLE_LINE[Math.floor(Math.random() * IDLE_LINE.length)]);
+  }, 20000);
+}
+
+/* ===================== 聊天（接后端大模型） ===================== */
+// 同源部署时留空；被单独打开时（file:// 或其他域名）用 API_BASE 兜底
+const API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
+let sessionId = null;
+
+async function ensureSession(){
+  if(sessionId) return sessionId;
+  try{
+    const r = await fetch(API_BASE + '/api/session', { method: 'POST' });
+    const j = await r.json();
+    sessionId = j.session_id;
+  }catch(e){ /* 离线就本地兜底 */ }
+  return sessionId;
+}
+ensureSession();
+
+// 情绪分级（前端兜底；后端返回 level 时优先用后端）
+const EMOTION_RULES = [
+  { lv: 4, re: /(傻[逼比]|去死|滚|废物|垃圾|白痴|妈的|艹|操你|狗东西)/ },
+  { lv: 3, re: /(气死|烦死|受不了|想打|打死|崩了|炸了|恨死|疯)/ },
+  { lv: 2, re: /(委屈|难受|憋屈|撑不住|累死|好累|心累|哭|委屈死)/ },
+  { lv: 1, re: /(烦|郁闷|倒霉|不爽|唉|难过|emo)/ }
+];
+function localLevel(text){
+  for(const r of EMOTION_RULES){ if(r.re.test(text)) return r.lv; }
+  return 1;
+}
+const CHAT_FALLBACK = {
+  1: ['我在听。','你慢慢说。','嗯，我知道了。'],
+  2: ['你一定很难受。','辛苦了。','我陪着你。'],
+  3: ['你真的很生气。','我感受到了。','没关系，发泄出来。'],
+  4: ['……','我还在听。','先停一下好不好。']
+};
+const STICKER_BY_LV = { 1:'我在听', 2:'委屈', 3:'吓到', 4:'安静' };
+
+const BODY_CLASSES = ['act-lean','act-shrink','act-recoil','act-low'];
+let bodyTimer = null;
+function bodyAct(lv){
+  const el = dabai;
+  BODY_CLASSES.forEach(c => el.classList.remove(c));
+  clearTimeout(bodyTimer);
+  const map = { 1:'act-lean', 2:'act-shrink', 3:'act-recoil', 4:'act-low' };
+  const cls = map[lv];
+  if(cls){
+    el.classList.add(cls);
+    bodyTimer = setTimeout(()=>{
+      el.classList.remove(cls);
+    }, lv >= 3 ? 2600 : 2000);
+  }
+}
+function applyEmotion(lv){
+  bodyAct(lv);
+  if(ko){
+    // 倒地时打字：不能起身，只让眼睛闪一下 + 「我还在」
+    const e = $('#eyeL');
+    if(e){ e.style.opacity = .9; setTimeout(()=>{ e.style.opacity = .55; }, 260); }
+    const s2 = document.createElement('div');
+    s2.className = 'stk';
+    s2.textContent = '我还在听';
+    s2.style.cssText = 'left:120px;top:120px';
+    fx.appendChild(s2);
+    setTimeout(()=>s2.remove(), 2600);
+    return;
+  }
+  // 眼睛/头跟着情绪走（不加重形变）
+  setMood(Math.min(4, lv === 4 ? 4 : lv === 3 ? 2 : lv === 2 ? 2 : 1));
+  const g = $('#grimace'); if(g) g.style.display = 'none';
+  // 头顶贴纸
+  const el = document.createElement('div');
+  el.className = 'stk';
+  el.textContent = STICKER_BY_LV[lv] || '我在听';
+  el.style.cssText = `left:${150 + Math.random()*40}px;top:${60 + Math.random()*20}px`;
+  fx.appendChild(el);
+  setTimeout(()=>el.remove(), 3000);
+  // 情绪动作
+  if(lv === 3){ dabai.classList.add('wobble'); setTimeout(()=>dabai.classList.remove('wobble'), 900); }
+  if(lv === 4){ say('……', true); }
+}
+
+async function sendChat(){
+  const input = $('#chatInput');
+  const text = (input.value || '').trim();
+  if(!text) return;
+  input.value = '';
+  const btn = $('#chatSend');
+  btn.disabled = true;
+  say('…');                     // 思考中
+  const lvLocal = localLevel(text);
+  let reply = null, level = lvLocal;
+  try{
+    const sid = await ensureSession();
+    if(sid){
+      const r = await fetch(API_BASE + '/api/chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id: sid, text, persona:'dabai', target_name: '它' })
+      });
+      const j = await r.json();
+      reply = j.reply;
+      if(j.level) level = j.level;
+      if(typeof j.hp === 'number'){ total = Math.max(0, MAX - j.hp); updateHUD(); }
+    }
+  }catch(e){ /* 断网走兜底 */ }
+  if(!reply){
+    const arr = CHAT_FALLBACK[level] || CHAT_FALLBACK[1];
+    reply = arr[Math.floor(Math.random()*arr.length)];
+  }
+  // 融合规则：刚被打过 → 先让击打反馈演完，0.5 秒后再叠文字表情
+  const delay = (Date.now() - lastHitAt < 400) ? 500 : 0;
+  setTimeout(()=>{ applyEmotion(level); say(reply, ko); }, delay);
+  // 文字也让火气涨一点（联动）
+  total = Math.min(MAX, total + (level >= 3 ? 2 : 1));
+  updateHUD();
+  resetIdle();
+  btn.disabled = false;
+}
+$('#chatSend').addEventListener('click', sendChat);
+$('#chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') sendChat(); });
 /* ===== 工具切换 ===== */
 document.querySelectorAll('.act').forEach(b=>{
   b.onclick = ()=>{
@@ -596,6 +1082,7 @@ document.querySelectorAll('.act').forEach(b=>{
   };
 });
 
+$('#dabai').classList.add('act-breathe');
 updateHUD();
 /* ===== 上传 + 命名（照片直接盖到脸上） ===== */
 let targetImg = null, targetName = '';
@@ -612,6 +1099,7 @@ $('#filePick').addEventListener('change', e => {
   const reader = new FileReader();
   reader.onload = () => {
     targetImg = reader.result;
+    detectFace(targetImg);
     const img = $('#targetPhoto');
     img.setAttribute('href', targetImg);
     img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', targetImg);
@@ -650,9 +1138,9 @@ if(q.get('skip') === '1'){
 if(q.get('auto')){
   // ?auto=head3,face3,belly3,foot2  便于截图/验收
   q.get('auto').split(',').forEach(seg => {
-    const m = seg.match(/([a-z]+)(\d+)/);
+    const m = seg.match(/([a-z]+)(\d*)/);
     if(!m) return;
-    const part = m[1], times = +m[2];
+    const part = m[1], times = (+m[2]) || 1;
     const g = svg.querySelector('.part[data-part="' + part + '"]');
     if(!g) return;
     const bb = g.getBBox();
@@ -663,10 +1151,11 @@ if(q.get('auto')){
     const r = $('.stage').getBoundingClientRect();
     for(let i = 0; i < times; i++){
       try{ hit(part, scr.x - r.left, scr.y - r.top, pt.x, pt.y); }
-      catch(err){ console.error('hit error', part, err); document.title = 'ERR:' + err.message; }
+      catch(err){ console.error('hit failed', err); }
     }
     updateHUD();
   });
+
 }
 if(q.get('ko') === '1'){ knockout(); }
 </script>
