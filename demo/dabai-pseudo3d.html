@@ -1029,6 +1029,48 @@ function fallbackLine(lv){
   return arr[i];
 }
 
+
+/* ===================== 直连大模型（Key 只存本机浏览器）===================== */
+const DS_KEY_LS = 'dabai_deepseek_key';
+function getLocalKey(){ try { return localStorage.getItem(DS_KEY_LS) || ''; } catch(e){ return ''; } }
+function setLocalKey(k){ try { localStorage.setItem(DS_KEY_LS, k); } catch(e){} }
+function askKey(){
+  const k = window.prompt('填入 DeepSeek API Key（只保存在你这台设备，不会上传到任何服务器）\n申请地址：platform.deepseek.com');
+  if(k && k.trim()){ setLocalKey(k.trim()); return k.trim(); }
+  return '';
+}
+const DABAI_SYSTEM = '你是"大白"，一个白色软胶机器人，正在安静地听用户发泄情绪。规则：'
+  + '1) 绝不顶嘴、不说教、不指责、不给建议清单；'
+  + '2) 只做共情和接纳，可以承认"我被打疼了"但绝不抱怨用户；'
+  + '3) 回复必须极短，8~22 个汉字，一到两句，像机器人轻声说话，可以用"…"表示停顿；'
+  + '4) 用户如果骂人，不重复脏话、不制止，只共情他的愤怒；'
+  + '5) 不要用感叹号，不要用书面语和成语。';
+async function llmReply(text, hurtRatio){
+  const key = getLocalKey() || askKey();
+  if(!key) return null;
+  const sys = DABAI_SYSTEM + '当前你身体的伤害程度：' + Math.round(hurtRatio * 100) + '%。';
+  const r = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: [
+        { role: 'system', content: sys },
+        { role: 'user', content: text }
+      ],
+      temperature: 1.1,
+      max_tokens: 80
+    })
+  });
+  if(!r.ok){
+    if(r.status === 401){ try{ localStorage.removeItem(DS_KEY_LS); }catch(e){} alert('API Key 无效，请重新填写'); return null; }
+    return null;
+  }
+  const j = await r.json();
+  const out = j && j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content;
+  return out ? out.trim() : null;
+}
+
 /* 从用户输入里抓一个"关键词"，让回复显得在听 */
 const STOP_WORDS = ['今天','真的','就是','这个','那个','感觉','有点','特别','非常','然后','但是','所以','因为','我们','他们','你们'];
 function extractKeyword(text){
@@ -1129,6 +1171,12 @@ async function sendChat(){
       if(typeof j.hp === 'number'){ total = Math.max(0, MAX - j.hp); updateHUD(); }
     }
   }catch(e){ /* 断网走兜底 */ }
+  if(!reply){
+    try{
+      const ai = await llmReply(text, total / MAX);
+      if(ai) reply = ai;
+    }catch(e){ /* 网络失败走本地 */ }
+  }
   if(!reply){
     reply = composeReply(text, level);
   }
