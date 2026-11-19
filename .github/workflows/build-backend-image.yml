@@ -18,12 +18,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build and push to GHCR
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-          # 镜像名必须全小写，GitHub 用户名可能是大写
-          OWNER=$(echo "${{ github.repository_owner }}" | tr "[:upper:]" "[:lower:]")
-          IMAGE=ghcr.io/$OWNER/sandbag-dabai-backend
-          docker build -t $IMAGE:latest -t $IMAGE:${{ github.sha }} ./backend
-          docker push $IMAGE:latest
-          docker push $IMAGE:${{ github.sha }}
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/zeng0728/sandbag-dabai-backend:latest
+            ghcr.io/zeng0728/sandbag-dabai-backend:${{ github.sha }}
