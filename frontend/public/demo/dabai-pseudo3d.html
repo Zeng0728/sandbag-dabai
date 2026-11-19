@@ -982,7 +982,7 @@ function resetIdle(){
 
 /* ===================== 聊天（接后端大模型） ===================== */
 // 同源部署时留空；被单独打开时（file:// 或其他域名）用 API_BASE 兜底
-const API_BASE = (location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '';
+const API_BASE = window.__DABAI_API__ || ((location.protocol === 'file:') ? 'http://127.0.0.1:8000' : '');
 let sessionId = null;
 
 async function ensureSession(){
@@ -1032,7 +1032,6 @@ function fallbackLine(lv){
 
 /* ===================== 直连大模型（Key 只存本机浏览器）===================== */
 const DS_KEY_LS = 'dabai_deepseek_key';
-const EMBEDDED_KEY = 'sk-60d6d331e57345688c0cfb291aae11ec';  // 分享版内置（会被任何人看到，作业演示用）
 function getLocalKey(){ try { return localStorage.getItem(DS_KEY_LS) || ''; } catch(e){ return ''; } }
 function setLocalKey(k){ try { localStorage.setItem(DS_KEY_LS, k); } catch(e){} }
 function askKey(){
@@ -1047,7 +1046,7 @@ const DABAI_SYSTEM = '你是"大白"，一个白色软胶机器人，正在安�
   + '4) 用户如果骂人，不重复脏话、不制止，只共情他的愤怒；'
   + '5) 不要用感叹号，不要用书面语和成语。';
 async function llmReply(text, hurtRatio){
-  const key = getLocalKey() || EMBEDDED_KEY || askKey();
+  const key = getLocalKey() || askKey();
   if(!key) return null;
   const sys = DABAI_SYSTEM + '当前你身体的伤害程度：' + Math.round(hurtRatio * 100) + '%。';
   const r = await fetch('https://api.deepseek.com/chat/completions', {

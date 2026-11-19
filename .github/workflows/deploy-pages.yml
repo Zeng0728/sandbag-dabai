@@ -40,6 +40,15 @@ jobs:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
         run: npm run build
 
+      # 把后端地址注入 demo 页面（游戏页面从这里读 API）
+      - name: Inject API base into demo
+        run: |
+          if [ -n "${{ vars.VITE_API_BASE }}" ]; then
+            for f in frontend/dist/demo/*.html; do
+              sed -i "s|</head>|<script>window.__DABAI_API__=\"${{ vars.VITE_API_BASE }}\"</script></head>|" "$f"
+            done
+          fi
+
       # 把 demo 目录（单文件试验版）一起发布，方便手机上直接试
       - name: Copy demo into dist
         run: |
