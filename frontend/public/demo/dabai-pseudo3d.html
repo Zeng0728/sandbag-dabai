@@ -1264,11 +1264,13 @@ let faceAdj = { dx: 0, dy: 0, zoom: 1 };   // 用户手动微调
 let lastFaceCtx = null;                     // 便于重新套用
 
 /* ===== 肤色 + 连通域：本地估算人脸框（无需网络、无需模型）=====
-   思路：先做肤色掩码，再做连通域标记，取"最像脸"的那一块（而不是整片皮肤的包围盒），
-   避免把脖子、手臂、肩膀一起框进来。 */
+   三档规则依次尝试（严格 / 放宽 / 放宽+白平衡），
+   每档都做连通域分割，只接受足够大的"脸块"，最后挑分数最高的那档结果。
+   这样暗光、暖光、偏色的半身照也能兜住。 */
 function detectFaceBySkin(img){
   try{
     const W = img.naturalWidth, H = img.naturalHeight;
+    if(!W || !H) return null;
     const maxSide = 200;
     const sc = Math.min(1, maxSide / Math.max(W, H));
     const w = Math.max(8, Math.round(W * sc)), h = Math.max(8, Math.round(H * sc));
@@ -1278,86 +1280,119 @@ function detectFaceBySkin(img){
     ctx.drawImage(img, 0, 0, w, h);
     const data = ctx.getImageData(0, 0, w, h).data;
 
-    // 1) 肤色掩码
-    const mask = new Uint8Array(w * h);
-    let skinTotal = 0;
-    for(let y = 0; y < h; y++){
-      for(let x = 0; x < w; x++){
-        const i = (y * w + x) * 4;
-        const r = data[i], g = data[i+1], b = data[i+2];
-        if(r < 60 || g < 30 || b < 15) continue;
-        const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
-        const cb = 128 - 0.168736*r - 0.331264*g + 0.5*b;
-        const cr = 128 + 0.5*r - 0.418688*g - 0.081312*b;
-        const okRGB = r > 95 && g > 40 && b > 20 && (mx-mn) > 15 && Math.abs(r-g) > 15 && r > g && r > b;
-        const okYCC = cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
-        if(okRGB && okYCC){ mask[y*w+x] = 1; skinTotal++; }
-      }
+    // 全局亮度与色偏（用于提亮与白平衡）
+    let sumL = 0, cnt = 0, sumR = 0, sumG = 0, sumB = 0;
+    for(let i = 0; i < data.length; i += 16){
+      const r = data[i], g = data[i+1], b = data[i+2];
+      sumL += 0.299*r + 0.587*g + 0.114*b;
+      sumR += r; sumG += g; sumB += b; cnt++;
     }
-    if(skinTotal < w*h*0.008) return null;
+    cnt = Math.max(1, cnt);
+    const meanL = sumL / cnt;
+    const gain = Math.min(2.8, Math.max(1, 120 / Math.max(10, meanL)));
+    const avgAll = (sumR + sumG + sumB) / (3 * cnt);
+    const wbR = avgAll / Math.max(1, sumR / cnt);
+    const wbG = avgAll / Math.max(1, sumG / cnt);
+    const wbB = avgAll / Math.max(1, sumB / cnt);
 
-    // 2) 连通域（4 邻域，栈式）
-    const label = new Int32Array(w*h).fill(-1);
-    const comps = [];
-    const stack = new Int32Array(w*h);
-    let cur = 0;
-    for(let sy = 0; sy < h; sy++){
-      for(let sx = 0; sx < w; sx++){
-        const idx0 = sy*w+sx;
-        if(!mask[idx0] || label[idx0] !== -1) continue;
-        let top = 0; stack[top++] = idx0; label[idx0] = cur;
-        let minX = sx, maxX = sx, minY = sy, maxY = sy, area = 0, sumY = 0;
-        while(top > 0){
-          const idx = stack[--top];
-          const y = (idx / w) | 0, x = idx - y*w;
-          area++; sumY += y;
-          if(x < minX) minX = x; if(x > maxX) maxX = x;
-          if(y < minY) minY = y; if(y > maxY) maxY = y;
-          if(x > 0     && mask[idx-1] && label[idx-1] === -1){ label[idx-1] = cur; stack[top++] = idx-1; }
-          if(x < w-1   && mask[idx+1] && label[idx+1] === -1){ label[idx+1] = cur; stack[top++] = idx+1; }
-          if(y > 0     && mask[idx-w] && label[idx-w] === -1){ label[idx-w] = cur; stack[top++] = idx-w; }
-          if(y < h-1   && mask[idx+w] && label[idx+w] === -1){ label[idx+w] = cur; stack[top++] = idx+w; }
+    const MIN_COMP = w * h * 0.010;      // 脸块至少占画面 1%
+    const MAX_COMP = w * h * 0.22;       // 脸块最多占 22%（超过说明整片被误判成肤色）
+
+    function maskFor(relaxed, useWB){
+      const m = new Uint8Array(w * h);
+      let tot = 0;
+      for(let y = 0; y < h; y++){
+        for(let x = 0; x < w; x++){
+          const i = (y * w + x) * 4;
+          let r = data[i], g = data[i+1], b = data[i+2];
+          if(useWB){ r *= wbR; g *= wbG; b *= wbB; }
+          r = Math.min(255, r * gain); g = Math.min(255, g * gain); b = Math.min(255, b * gain);
+          const mx = Math.max(r,g,b), mn = Math.min(r,g,b);
+          const cb = 128 - 0.168736*r - 0.331264*g + 0.5*b;
+          const cr = 128 + 0.5*r - 0.418688*g - 0.081312*b;
+          let ok;
+          if(!relaxed){
+            ok = r > 95 && g > 40 && b > 20 && (mx-mn) > 15 && Math.abs(r-g) > 15 && r > g && r > b &&
+                 cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
+          }else{
+            ok = r > 45 && g > 22 && b > 10 && (mx-mn) > 8 && r >= g - 4 && r > b &&
+                 cb >= 68 && cb <= 138 && cr >= 126 && cr <= 186;
+          }
+          if(ok){ m[y*w+x] = 1; tot++; }
         }
-        comps.push({ x:minX, y:minY, w:maxX-minX+1, h:maxY-minY+1, area, cy: sumY/area });
-        cur++;
       }
+      return { m, tot };
     }
-    if(!comps.length) return null;
 
-    // 3) 给每块打分：面积大、宽高比接近 0.6~1.0、位置偏上、有足够的"块状"程度
+    function components(m){
+      const label = new Int32Array(w * h).fill(-1);
+      const stack = new Int32Array(w * h);
+      const comps = [];
+      let cur = 0;
+      for(let sy = 0; sy < h; sy++){
+        for(let sx = 0; sx < w; sx++){
+          const idx0 = sy*w + sx;
+          if(!m[idx0] || label[idx0] !== -1) continue;
+          let top = 0; stack[top++] = idx0; label[idx0] = cur;
+          let minX = sx, maxX = sx, minY = sy, maxY = sy, area = 0;
+          while(top > 0){
+            const idx = stack[--top];
+            const y = (idx / w) | 0, x = idx - y*w;
+            area++;
+            if(x < minX) minX = x; if(x > maxX) maxX = x;
+            if(y < minY) minY = y; if(y > maxY) maxY = y;
+            if(x > 0   && m[idx-1] && label[idx-1] === -1){ label[idx-1] = cur; stack[top++] = idx-1; }
+            if(x < w-1 && m[idx+1] && label[idx+1] === -1){ label[idx+1] = cur; stack[top++] = idx+1; }
+            if(y > 0   && m[idx-w] && label[idx-w] === -1){ label[idx-w] = cur; stack[top++] = idx-w; }
+            if(y < h-1 && m[idx+w] && label[idx+w] === -1){ label[idx+w] = cur; stack[top++] = idx+w; }
+          }
+          comps.push({ x:minX, y:minY, w:maxX-minX+1, h:maxY-minY+1, area });
+          cur++;
+        }
+      }
+      return comps;
+    }
+
+    function scoreOf(c){
+      const ar = c.w / c.h;
+      const arS = 1 - Math.min(1, Math.abs(ar - 0.78) / 0.55);
+      const areaS = Math.min(1, c.area / (w*h*0.05));
+      const topS = 1 - Math.min(1, c.y / (h*0.80));
+      const fill = c.area / (c.w * c.h);
+      const fillS = Math.min(1, fill / 0.55);
+      return arS*0.34 + areaS*0.26 + topS*0.24 + fillS*0.16;
+    }
+
+    // 三档规则，选"最大合格块分数最高"的一档
     let best = null, bestScore = -1;
-    for(const c of comps){
-      const ar = c.w / c.h;                       // 宽高比
-      const arScore = 1 - Math.min(1, Math.abs(ar - 0.78) / 0.55);   // 0.78 最像脸
-      const areaScore = Math.min(1, c.area / (w*h*0.06));
-      const topScore = 1 - Math.min(1, c.y / (h*0.85));              // 越靠上越可能是脸
-      const fill = c.area / (c.w * c.h);                              // 填充率，手臂细长会低
-      const fillScore = Math.min(1, fill / 0.55);
-      const score = arScore * 0.34 + areaScore * 0.26 + topScore * 0.24 + fillScore * 0.16;
-      if(score > bestScore){ bestScore = score; best = c; }
+    const modes = [[false,false], [true,false], [true,true]];
+    for(let k = 0; k < modes.length; k++){
+      const { m, tot } = maskFor(modes[k][0], modes[k][1]);
+      if(tot < w*h*0.006) continue;
+      if(tot > w*h*0.50) continue;                 // 整幅都像肤色 → 该档规则不可信，跳过
+      const comps = components(m);
+      for(const c of comps){
+        if(c.area < MIN_COMP || c.area > MAX_COMP) continue;
+        const s2 = scoreOf(c) + (k === 0 ? 0.05 : 0);   // 轻微偏好严格规则
+        if(s2 > bestScore){ bestScore = s2; best = c; }
+      }
     }
     if(!best) return null;
 
-    // 4) 从这块肤色里裁出"脸"：脸高约占肤色块高的上限，宽度按 0.78 反推
+    // 从肤色块里裁出脸：按 0.78 宽高比，取块的上部（下方常是脖子/胸口）
     let fw = best.w, fh = best.h;
-    const targetAR = 0.78;                       // 人脸的宽/高
-    if(fw / fh > targetAR){ fw = fh * targetAR; }
-    else { fh = fw / targetAR; }
-    // 脸一般位于这块的顶部；若块很高（含脖子/衣服），只取上部
+    const targetAR = 0.78;
+    if(fw / fh > targetAR){ fw = fh * targetAR; } else { fh = fw / targetAR; }
     const cx = best.x + best.w / 2;
-    let cy = best.y + fh / 2 + Math.max(0, (best.h - fh) * 0.12);
+    let cy = best.y + fh / 2 + Math.max(0, (best.h - fh) * 0.10);
     if(cy + fh/2 > h) cy = h - fh/2;
     if(cy - fh/2 < 0) cy = fh/2;
 
-    let fx = cx - fw/2, fy = cy - fh/2;
-    fx = Math.max(0, Math.min(w - fw, fx));
-    fy = Math.max(0, Math.min(h - fh, fy));
-
-    // 稍微外扩，避免裁掉额头、下巴
+    let fx = Math.max(0, Math.min(w - fw, cx - fw/2));
+    let fy = Math.max(0, Math.min(h - fh, cy - fh/2));
     const padX = fw * 0.05, padY = fh * 0.06;
-    let x0 = Math.max(0, fx - padX), y0 = Math.max(0, fy - padY);
-    let x1 = Math.min(w, fx + fw + padX), y1 = Math.min(h, fy + fh + padY);
-
+    const x0 = Math.max(0, fx - padX), y0 = Math.max(0, fy - padY);
+    const x1 = Math.min(w, fx + fw + padX), y1 = Math.min(h, fy + fh + padY);
     return { x: x0/w, y: y0/h, w: (x1-x0)/w, h: (y1-y0)/h };
   }catch(e){ return null; }
 }
