@@ -419,6 +419,7 @@
       <button data-zoom="1.08">＋</button>
       <button data-zoom="0.92">－</button>
       <button id="tuneReset">重置</button>
+      <button id="tunePick">框选</button>
     </div>
 <div class="chat">
       <input id="chatInput" maxlength="60" placeholder="跟大白说两句…（它会听）">
@@ -1377,9 +1378,11 @@ function detectFaceBySkin(img){
       const arS = 1 - Math.min(1, Math.abs(ar - 0.78) / 0.55);
       const areaS = Math.min(1, c.area / (w*h*0.05));
       const topS = 1 - Math.min(1, c.y / (h*0.80));
+      const cxr = (c.x + c.w/2) / w, cyr = (c.y + c.h/2) / h;
+      const centerS = 1 - Math.min(1, Math.hypot(cxr - 0.5, cyr - 0.42) / 0.6);   // 越靠近画面中部偏上越像主体
       const fill = c.area / (c.w * c.h);
       const fillS = Math.min(1, fill / 0.55);
-      return arS*0.34 + areaS*0.26 + topS*0.24 + fillS*0.16;
+      return arS*0.30 + areaS*0.26 + topS*0.18 + fillS*0.14 + centerS*0.12;
     }
 
     // 三档规则，选"最大合格块分数最高"的一档
@@ -1482,6 +1485,12 @@ function applyFaceTexture(dataUrl, nbox){
     document.getElementById('photoSlot').style.display = '';
     document.getElementById('faceUploadHint').style.display = 'none';
     if(typeof setSelfFaceVisible === 'function') setSelfFaceVisible(false);
+    // 结果可疑时提示可用"框选"
+    const ar = b.w / b.h;
+    const tip = document.getElementById('tip');
+    if(tip && (Math.abs(ar - 0.78) > 0.55 || b.w < 0.06 || b.h < 0.06)){
+      tip.textContent = '自动识别可能不准，可点「框选」自己框一下';
+    }
   };
   img.src = dataUrl;
 }
@@ -1523,6 +1532,72 @@ function toggleVoice(){
   if(b) b.textContent = voiceOn ? '🔊' : '🔇';
 }
 
+
+
+/* ===== 手动框选人脸（自动识别不准时兜底）===== */
+let facePickMode = 0;         // 0=关 1=等左上角 2=等右下角
+let pickA = null, pickRect = null;
+(function(){
+  const svgEl = document.getElementById('svg');
+  const btn = document.getElementById('tunePick');
+  if(!svgEl || !btn) return;
+
+  function toSvg(e){
+    const pt = svgEl.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    return pt.matrixTransform(svgEl.getScreenCTM().inverse());
+  }
+  function clearRect(){
+    if(pickRect && pickRect.parentNode) pickRect.parentNode.removeChild(pickRect);
+    pickRect = null;
+  }
+  function showHint(t){
+    const tip = document.getElementById('tip');
+    if(tip) tip.textContent = t;
+  }
+  btn.addEventListener('click', function(){
+    facePickMode = 1; pickA = null; clearRect();
+    btn.style.background = '#ffe8d6';
+    btn.textContent = '点左上角';
+    showHint('在脸上点一下左上角，再点右下角');
+  });
+
+  svgEl.addEventListener('pointerdown', function(e){
+    if(!facePickMode) return;
+    e.stopPropagation();
+    const sp = toSvg(e);
+    if(facePickMode === 1){
+      pickA = sp; facePickMode = 2; btn.textContent = '点右下角';
+      return;
+    }
+    if(facePickMode === 2 && pickA){
+      const el = document.getElementById('targetPhoto');
+      if(!el || !lastFaceCtx) return;
+      const px = parseFloat(el.getAttribute('x'));
+      const py = parseFloat(el.getAttribute('y'));
+      const pw = parseFloat(el.getAttribute('width'));
+      const ph = parseFloat(el.getAttribute('height'));
+      const x1 = Math.min(pickA.x, sp.x), x2 = Math.max(pickA.x, sp.x);
+      const y1 = Math.min(pickA.y, sp.y), y2 = Math.max(pickA.y, sp.y);
+      if(x2 - x1 < 12 || y2 - y1 < 12){ showHint('框太小了，重来'); return; }
+      const box = {
+        x: (x1 - px) / pw,
+        y: (y1 - py) / ph,
+        w: (x2 - x1) / pw,
+        h: (y2 - y1) / ph
+      };
+      box.x = Math.max(0, Math.min(1, box.x));
+      box.y = Math.max(0, Math.min(1, box.y));
+      box.w = Math.max(0.02, Math.min(1 - box.x, box.w));
+      box.h = Math.max(0.02, Math.min(1 - box.y, box.h));
+      faceAdj = { dx: 0, dy: 0, zoom: 1 };
+      applyFaceTexture(lastFaceCtx.dataUrl, box);
+      facePickMode = 0; pickA = null; clearRect();
+      btn.style.background = ''; btn.textContent = '框选';
+      showHint('已按你框的位置贴合，可用←→↑↓微调');
+    }
+  }, true);
+})();
 
 /* ===== 直接操作：拖动平移、滚轮/双指缩放 ===== */
 (function(){
