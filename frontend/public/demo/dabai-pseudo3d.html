@@ -43,16 +43,14 @@
     transition:transform .5s cubic-bezier(.2,.8,.2,1),filter .4s;cursor:crosshair}
   .dabai.ko{transform:rotateX(14deg) rotateY(-14deg) rotate(-9deg) translateY(54px) scaleY(.5) scaleX(1.1);
     filter:saturate(.5) brightness(.95);cursor:not-allowed}
-  .dabai.shake #bellyG,
-  .dabai.shake #handG,
-  .dabai.shake #footG{animation:bodyHit .3s cubic-bezier(.2,.9,.3,1.2)}
-  .dabai.shake #bellyG, .dabai.shake #handG{filter:brightness(.97)}
-  @keyframes bodyHit{
-    0%{transform:scale(1,1) rotate(0)}
-    22%{transform:scale(1.08,.90) rotate(-1.2deg)}
-    52%{transform:scale(.96,1.05) rotate(.8deg)}
-    78%{transform:scale(1.02,.98) rotate(-.3deg)}
-    100%{transform:scale(1,1) rotate(0)}
+  .dabai.shake{animation:sh .34s cubic-bezier(.36,.07,.19,.97)}
+
+  @keyframes sh{
+    0%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}
+    25%{transform:rotateX(4deg) rotateY(-7deg) translate(-8px,3px) rotate(-1.6deg)}
+    55%{transform:rotateX(4deg) rotateY(-7deg) translate(7px,-3px) rotate(1.2deg)}
+    80%{transform:rotateX(4deg) rotateY(-7deg) translate(-3px,1px) rotate(-.6deg)}
+    100%{transform:rotateX(4deg) rotateY(-7deg) translate(0,0)}
   }
   .wpn-glove{animation:gloveIn .42s cubic-bezier(.2,.9,.3,1) forwards}
   @keyframes gloveIn{
