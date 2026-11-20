@@ -259,7 +259,14 @@
     transition:transform .12s,box-shadow .2s}
   .fab button:active{transform:scale(.92)}
   #btnClear{width:36px;height:36px;font-size:14px;align-self:flex-end;background:#f3ece4;color:#a08b7c}
+  .tune{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:8px;font-size:11.5px;color:#a08b7c}
+  .tune span{white-space:nowrap}
+  .tune button{min-width:30px;height:26px;border:1px solid #e7d9cc;border-radius:8px;
+    background:#fdf7f1;color:#6b5748;font-size:13px;cursor:pointer;font-family:inherit}
+  .tune button:active{transform:scale(.94)}
+  #tuneReset{font-size:11px;padding:0 8px}
 </style>
+
 </head>
 <body>
 <div class="app">
@@ -387,6 +394,16 @@
       <button class="act" data-tool="rock"><span>🪨</span>石头</button>
     </div>
     <div class="voicerow"><button id="voiceBtn" onclick="toggleVoice()">🔊</button><span>大白的声音</span></div>
+    <div class="tune" id="faceTune" style="display:none">
+      <span>位置微调</span>
+      <button data-dx="-6" data-dy="0">←</button>
+      <button data-dx="6" data-dy="0">→</button>
+      <button data-dx="0" data-dy="-6">↑</button>
+      <button data-dx="0" data-dy="6">↓</button>
+      <button data-zoom="1.08">＋</button>
+      <button data-zoom="0.92">－</button>
+      <button id="tuneReset">重置</button>
+    </div>
     <div class="chat">
       <input id="chatInput" maxlength="60" placeholder="跟大白说两句…（它会听）">
       <button id="chatSend">发送</button>
@@ -588,10 +605,7 @@ async function detectFace(dataUrl){
       }
     }
   }catch(e){ /* 不支持就走启发式 */ }
-  if(!box){
-    // 启发式：人脸一般在中上部，占宽 60%、高 60%
-    box = { x: 0.20, y: 0.10, w: 0.60, h: 0.62 };
-  }
+  if(!box){ return null; }   // 交给 applyFaceTexture 里的肤色检测
   // 脸部坐标（SVG 系）仍给眼泪/嘴用
   faceBox = { x: 150 - 40, y: 132 - 42, w: 80, h: 84 };
   return box;
@@ -1245,28 +1259,82 @@ $('#chatInput').addEventListener('keydown', e => { if(e.key === 'Enter') sendCha
 
 /* ===== 自动人脸抠图：把检测到的脸框铺到目标椭圆上 ===== */
 /* nbox: 归一化脸框 {x,y,w,h}（0~1） */
+let faceAdj = { dx: 0, dy: 0, zoom: 1 };   // 用户手动微调
+let lastFaceCtx = null;                     // 便于重新套用
+
+/* ===== 肤色检测：本地估算人脸框（无需网络、无需模型）===== */
+function detectFaceBySkin(img){
+  try{
+    const W = img.naturalWidth, H = img.naturalHeight;
+    const scale = Math.min(1, 220 / Math.max(W, H));
+    const w = Math.max(1, Math.round(W * scale)), h = Math.max(1, Math.round(H * scale));
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    const ctx = cv.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0, w, h);
+    const data = ctx.getImageData(0, 0, w, h).data;
+
+    let minX = w, minY = h, maxX = -1, maxY = -1, hits = 0;
+    for(let y = 0; y < Math.floor(h * 0.75); y++){
+      for(let x = 0; x < w; x++){
+        const i = (y * w + x) * 4;
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        if(r < 60 || g < 30 || b < 15) continue;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+        // RGB 肤色规则 + YCbCr 肤色规则
+        const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+        const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+        const skinRGB = r > 95 && g > 40 && b > 20 && (mx - mn) > 15 &&
+                        Math.abs(r - g) > 15 && r > g && r > b;
+        const skinYCbCr = cb >= 77 && cb <= 127 && cr >= 133 && cr <= 173;
+        if(skinRGB && skinYCbCr){
+          hits++;
+          if(x < minX) minX = x;
+          if(x > maxX) maxX = x;
+          if(y < minY) minY = y;
+          if(y > maxY) maxY = y;
+        }
+      }
+    }
+    if(hits < w * h * 0.01 || maxX <= minX) return null;   // 肤色太少，判为失败
+    // 轻微外扩，避免裁掉下巴与额头
+    const padX = (maxX - minX) * 0.06, padY = (maxY - minY) * 0.08;
+    minX = Math.max(0, minX - padX); maxX = Math.min(w, maxX + padX);
+    minY = Math.max(0, minY - padY); maxY = Math.min(h, maxY + padY);
+    return { x: minX / w, y: minY / h, w: (maxX - minX) / w, h: (maxY - minY) / h };
+  }catch(e){ return null; }
+}
+
+/* ===== 把图片按“人脸框 → 目标椭圆”等比贴合（不拉伸变形）===== */
 function applyFaceTexture(dataUrl, nbox){
-  const ATT = { cx:150, cy:132, rx:90, ry:86, pad:1.04 };
+  const ATT = { cx:150, cy:132, rx:90, ry:86, pad:1.06 };
   const img = new Image();
   img.onload = () => {
     const W = img.naturalWidth || 1, H = img.naturalHeight || 1;
-    const b = nbox || { x:0.2, y:0.10, w:0.60, h:0.62 };
+    let b = nbox;
+    if(!b){ b = detectFaceBySkin(img); }
+    if(!b){ b = { x:0.20, y:0.10, w:0.60, h:0.62 }; }
+    lastFaceCtx = { dataUrl, box: b };
+
     const bw = Math.max(8, b.w * W), bh = Math.max(8, b.h * H);
     const bx = b.x * W, by = b.y * H;
-    // 让脸框填满目标椭圆（外接矩形）
-    const scale = Math.max((ATT.rx * 2) / bw, (ATT.ry * 2) / bh) * ATT.pad;
+
+    // 等比缩放：取较大者，保证脸框完全覆盖椭圆（多出的部分被椭圆遮罩裁掉）
+    const zoom = (faceAdj.zoom || 1);
+    const scale = Math.max((ATT.rx * 2) / bw, (ATT.ry * 2) / bh) * ATT.pad * zoom;
     const dw = W * scale, dh = H * scale;
-    // 脸框中心对齐椭圆中心
+
     const faceCx = (bx + bw / 2) * scale;
     const faceCy = (by + bh / 2) * scale;
-    const x = ATT.cx - faceCx;
-    const y = ATT.cy - faceCy;
+    const x = ATT.cx - faceCx + (faceAdj.dx || 0);
+    const y = ATT.cy - faceCy + (faceAdj.dy || 0);
+
     const el = document.getElementById('targetPhoto');
     el.setAttribute('x', x.toFixed(2));
     el.setAttribute('y', y.toFixed(2));
     el.setAttribute('width', dw.toFixed(2));
     el.setAttribute('height', dh.toFixed(2));
-    el.setAttribute('preserveAspectRatio', 'none');
+    el.setAttribute('preserveAspectRatio', 'xMidYMid slice');   // 关键：等比，不拉伸
     el.setAttribute('href', dataUrl);
     el.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', dataUrl);
     document.getElementById('photoSlot').style.display = '';
@@ -1275,6 +1343,7 @@ function applyFaceTexture(dataUrl, nbox){
   };
   img.src = dataUrl;
 }
+
 /* ===================== 语音（大白的声音） ===================== */
 let voiceOn = true;
 let zhVoice = null;
@@ -1311,6 +1380,28 @@ function toggleVoice(){
   const b = document.getElementById('voiceBtn');
   if(b) b.textContent = voiceOn ? '🔊' : '🔇';
 }
+
+/* ===== 人脸位置微调 ===== */
+(function(){
+  var tune = document.getElementById('faceTune');
+  if(!tune) return;
+  function rerender(){
+    if(lastFaceCtx && lastFaceCtx.dataUrl) applyFaceTexture(lastFaceCtx.dataUrl, lastFaceCtx.box);
+  }
+  tune.addEventListener('click', function(e){
+    var b = e.target.closest('button');
+    if(!b) return;
+    if(b.id === 'tuneReset'){ faceAdj = { dx:0, dy:0, zoom:1 }; rerender(); return; }
+    var dx = parseFloat(b.getAttribute('data-dx') || 0);
+    var dy = parseFloat(b.getAttribute('data-dy') || 0);
+    var zm = parseFloat(b.getAttribute('data-zoom') || 0);
+    faceAdj.dx = (faceAdj.dx || 0) + dx;
+    faceAdj.dy = (faceAdj.dy || 0) + dy;
+    if(zm) faceAdj.zoom = Math.max(0.7, Math.min(1.8, (faceAdj.zoom || 1) * zm));
+    rerender();
+  });
+})();
+
 /* ===== 工具切换 ===== */
 document.querySelectorAll('.act').forEach(b=>{
   b.onclick = ()=>{
@@ -1347,6 +1438,7 @@ $('#filePick').addEventListener('change', e => {
     const tg = $('#targetTag');
     tg.style.display = 'block';
     const bc = document.getElementById('btnClear'); if(bc) bc.style.display = 'block';
+    const ft = document.getElementById('faceTune'); if(ft) ft.style.display = 'flex';
     tg.textContent = '正在打：' + (nameInput.value.trim() || '那个东西');
   };
   reader.readAsDataURL(f);
@@ -1364,6 +1456,17 @@ if(q.get('dmg')){
   let guard = 0;
   while(total < target && guard++ < 200){ hit('belly', 150, 250); }
 }
+
+/* ?img=<url> 直接套用一张网络/相对路径图片（便于测试与人脸效果预览） */
+if(q.get('img')){
+  const src = q.get('img');
+  const ft3 = document.getElementById('faceTune'); if(ft3) ft3.style.display = 'flex';
+  const tg3 = document.getElementById('targetTag');
+  if(tg3){ tg3.style.display = 'block'; tg3.textContent = '正在打：' + (q.get('name') || '那个东西'); }
+  const bc3 = document.getElementById('btnClear'); if(bc3) bc3.style.display = 'block';
+  applyFaceTexture(src, null);
+}
+
 if(q.get('skip') === '1'){
   // 截图/验收用：跳过上传
   $('#faceUploadHint').style.display = 'none';
@@ -1372,6 +1475,7 @@ if(q.get('skip') === '1'){
   tag.style.display = 'block';
   const fake = 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="300" height="360"><rect width="300" height="360" fill="#a89886"/><circle cx="150" cy="140" r="72" fill="#6f6156"/><ellipse cx="122" cy="122" rx="13" ry="17" fill="#2f2b28"/><ellipse cx="178" cy="122" rx="13" ry="17" fill="#2f2b28"/><path d="M112 196 q38 26 76 0" stroke="#2f2b28" stroke-width="8" fill="none" stroke-linecap="round"/></svg>');
   applyFaceTexture(fake, { x: 0.18, y: 0.10, w: 0.64, h: 0.70 });
+  const ft2 = document.getElementById('faceTune'); if(ft2) ft2.style.display = 'flex';
 }
 if(q.get('auto')){
   // ?auto=head3,face3,belly3,foot2  便于截图/验收
