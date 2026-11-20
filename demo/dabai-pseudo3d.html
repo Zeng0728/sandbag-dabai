@@ -1415,7 +1415,7 @@ function detectFaceBySkin(img){
     const padX = fw * 0.05, padY = fh * 0.06;
     const x0 = Math.max(0, fx - padX), y0 = Math.max(0, fy - padY);
     const x1 = Math.min(w, fx + fw + padX), y1 = Math.min(h, fy + fh + padY);
-    return { x: x0/w, y: y0/h, w: (x1-x0)/w, h: (y1-y0)/h };
+    return { x: x0/w, y: y0/h, w: (x1-x0)/w, h: (y1-y0)/h, from: 'skin' };
   }catch(e){ return null; }
 }
 
@@ -1533,6 +1533,68 @@ function toggleVoice(){
 }
 
 
+
+
+/* ===================== 真·人脸检测（face-api.js tiny detector）=====================
+   首次人像上传时按需加载（约 1.3MB），CDN 不可达时自动退回本地的肤色检测。 */
+let faceApiPromise = null;
+const FACE_API_BASE = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api';
+function loadFaceApi(){
+  if(faceApiPromise) return faceApiPromise;
+  faceApiPromise = new Promise(function(resolve, reject){
+    const sc = document.createElement('script');
+    sc.src = FACE_API_BASE + '/dist/face-api.min.js';
+    sc.async = true;
+    sc.onload = async function(){
+      try{
+        const fa = window.faceapi;
+        if(!fa){ reject(new Error('no faceapi')); return; }
+        // 关键：先初始化 tfjs 后端，否则会出现 "backend 'wasm' has not yet been initialized"
+        if(fa.tf){
+          try{ await fa.tf.setBackend('webgl'); }catch(e1){ try{ await fa.tf.setBackend('cpu'); }catch(e2){} }
+          await fa.tf.ready();
+        }
+        await fa.nets.tinyFaceDetector.loadFromUri(FACE_API_BASE + '/model');
+        resolve(fa);
+      }catch(e){ reject(e); }
+    };
+    sc.onerror = function(){ reject(new Error('cdn blocked')); };
+    document.head.appendChild(sc);
+  });
+  return faceApiPromise;
+}
+
+/* 用模型检测单张人脸，返回归一化框（略微外扩） */
+async function detectFaceByModel(img){
+  try{
+    const fa = await loadFaceApi();
+    const opts = new fa.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: 0.30 });
+    const res = await fa.detectSingleFace(img, opts);
+    if(!res || !res.box) return null;
+    const W = img.naturalWidth || img.width, H = img.naturalHeight || img.height;
+    const b = res.box;
+    // 模型框比较紧，外扩一点把额头和下巴包进来
+    const padW = b.width * 0.14, padH = b.height * 0.18;
+    let x = b.x - padW, y = b.y - padH, w = b.width + padW * 2, h = b.height + padH * 2;
+    x = Math.max(0, x); y = Math.max(0, y);
+    w = Math.min(W - x, w); h = Math.min(H - y, h);
+    return { x: x / W, y: y / H, w: w / W, h: h / H, from: 'model', score: res.score };
+  }catch(e){
+    return null;
+  }
+}
+
+/* 综合检测：模型 → 浏览器原生 → 肤色兜底 */
+async function detectBestFace(dataUrl){
+  const img = new Image();
+  img.src = dataUrl;
+  try{ await img.decode(); }catch(e){}
+  const m = await detectFaceByModel(img);
+  if(m) return m;
+  const n = await detectFace(dataUrl);
+  if(n) return n;
+  return detectFaceBySkin(img);
+}
 
 /* ===== 手动框选人脸（自动识别不准时兜底）===== */
 let facePickMode = 0;         // 0=关 1=等左上角 2=等右下角
@@ -1733,7 +1795,14 @@ $('#filePick').addEventListener('change', e => {
   reader.onload = () => {
     targetImg = reader.result;
     if(uploadMode === 'object'){ applyPhotoWhole(targetImg); }
-    else { detectFace(targetImg).then(b => applyFaceTexture(targetImg, b)); }
+    else {
+      const tip0 = document.getElementById('tip');
+      if(tip0) tip0.textContent = '正在识别人脸…';
+      detectBestFace(targetImg).then(function(b){
+        if(tip0) tip0.textContent = '';
+        applyFaceTexture(targetImg, b);
+      });
+    }
     const img = $('#targetPhoto');
     img.setAttribute('href', targetImg);
     img.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', targetImg);
@@ -1773,13 +1842,15 @@ if(q.get('objimg')){
   applyPhotoWhole(src2);
 }
 
+
+
 if(q.get('img')){
   const src = q.get('img');
   const ft3 = document.getElementById('faceTune'); if(ft3) ft3.style.display = 'flex';
   const tg3 = document.getElementById('targetTag');
   if(tg3){ tg3.style.display = 'block'; tg3.textContent = '正在打：' + (q.get('name') || '那个东西'); }
   const bc3 = document.getElementById('btnClear'); if(bc3) bc3.style.display = 'block';
-  applyFaceTexture(src, null);
+  detectBestFace(src).then(function(b){ applyFaceTexture(src, b); });
 }
 
 
