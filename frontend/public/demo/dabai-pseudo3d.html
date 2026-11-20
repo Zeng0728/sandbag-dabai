@@ -461,11 +461,11 @@ function hit(part, x, y, sx, sy){
   partHits[part] = (partHits[part]||0) + 1;
   lastHitAt = Date.now();
 
-  if(!LOWFX){ dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake'); }
+  dabai.classList.remove('shake'); void dabai.offsetWidth; dabai.classList.add('shake');
   beep(tool, part);
-  if(!LOWFX) spawnWeapon(tool, x, y);
+  spawnWeapon(tool, x, y);
   spawnDent(x, y);
-  if(tool === 'rock' && !LOWFX) spawnRing(x, y, tool);
+  spawnRing(x, y, tool);
   addDecal(part, partHits[part], sx, sy);
   deformPart(part, sx, sy, partHits[part]);
   if(partHits[part] === 1 || partHits[part] === 4) showSticker(part, LINES[part][Math.min(2, Math.floor(partHits[part]/3))] );
@@ -481,7 +481,7 @@ function hit(part, x, y, sx, sy){
 function spawnDent(x,y){
   const d = document.createElement('div');
   d.className='dent';
-  const size = 46 + Math.random()*16;
+  const size = 54 + Math.random()*18;
   d.style.cssText = `left:${x}px;top:${y}px;width:${size}px;height:${size}px`;
   fx.appendChild(d); setTimeout(()=>d.remove(), 700);
 }
